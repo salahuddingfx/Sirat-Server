@@ -35,4 +35,13 @@ const orderSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
+// Virtual for id
+orderSchema.virtual("id").get(function () {
+  return this._id.toHexString();
+});
+
+// Ensure virtuals are serialized
+orderSchema.set("toJSON", { virtuals: true });
+orderSchema.set("toObject", { virtuals: true });
+
 module.exports = mongoose.model("Order", orderSchema);
