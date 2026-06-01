@@ -13,8 +13,8 @@ router.get("/best-seller", productController.getBestSeller);
 router.get("/:id", productController.getProduct);
 
 // Protected Admin Routes
-router.post("/", upload.array("images", 5), productController.createProduct);
-router.put("/:id", upload.array("images", 5), productController.updateProduct);
-router.delete("/:id", productController.deleteProduct);
+router.post("/", protect, admin, upload.array("images", 5), productController.createProduct);
+router.put("/:id", protect, admin, upload.array("images", 5), productController.updateProduct);
+router.delete("/:id", protect, admin, productController.deleteProduct);
 
 module.exports = router;
