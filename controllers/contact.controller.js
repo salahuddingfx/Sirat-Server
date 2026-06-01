@@ -18,7 +18,8 @@ const submitContactForm = async (req, res) => {
             html: `<p><strong>Name:</strong> ${contact.name}</p>
                    <p><strong>Email:</strong> ${contact.email}</p>
                    <p><strong>Message:</strong></p>
-                   <p>${contact.message}</p>`
+                   <p>${contact.message}</p>`,
+            replyTo: contact.email
           });
         }
       } catch (e) {

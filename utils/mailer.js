@@ -1,83 +1,56 @@
+const nodemailer = require('nodemailer');
 const env = require('../config/env.config');
-const https = require('https');
 
-function postJson(url, data, headers = {}) {
-  return new Promise((resolve, reject) => {
-    try {
-      const parsed = new URL(url);
-      const body = JSON.stringify(data);
-      const opts = {
-        hostname: parsed.hostname,
-        path: parsed.pathname + (parsed.search || ''),
-        method: 'POST',
-        headers: Object.assign({
-          'Content-Type': 'application/json',
-          'Content-Length': Buffer.byteLength(body)
-        }, headers)
-      };
+const smtpPort = Number(env.mail?.smtpPort || 587);
 
-      const req = https.request(opts, (res) => {
-        let chunks = '';
-        res.on('data', (c) => chunks += c);
-        res.on('end', () => {
-          const status = res.statusCode;
-          const text = chunks || '';
-          if (status >= 200 && status < 300) {
-            try { resolve(JSON.parse(text || '{}')); } catch (e) { resolve({}); }
-          } else {
-            const err = new Error(`HTTP ${status} ${res.statusMessage}`);
-            err.status = status;
-            err.body = text;
-            reject(err);
-          }
-        });
-      });
+const transporter = nodemailer.createTransport({
+  host: env.mail?.smtpHost || 'smtp-relay.brevo.com',
+  port: smtpPort,
+  secure: smtpPort === 465,
+  auth: {
+    user: env.mail?.smtpUser,
+    pass: env.mail?.smtpPass
+  },
+  tls: {
+    rejectUnauthorized: false
+  }
+});
 
-      req.on('error', reject);
-      req.write(body);
-      req.end();
-    } catch (e) {
-      reject(e);
-    }
-  });
+function htmlToText(html = '') {
+  return html
+    .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+    .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 /**
- * Send transactional email using Brevo (Sendinblue) transactional API.
- * @param {{to: {email:string,name?:string}[]|{email:string,name?:string}, subject:string, html:string, text?:string, sender?: {email,name}}} options
+ * Send transactional email over SMTP relay.
+ * @param {{to: {email:string,name?:string}[]|{email:string,name?:string}, subject:string, html:string, text?:string, sender?: {email:string,name?:string}, replyTo?: string}} options
  */
-async function sendEmail({ to = [], subject = '', html = '', text = '', sender = null }) {
-  const apiKey = env.mail?.brevoApiKey;
-  if (!apiKey) throw new Error('Brevo API key not configured (BREVO_API_KEY).');
+async function sendEmail({ to = [], subject = '', html = '', text = '', sender = null, replyTo = null }) {
+  if (!env.mail?.smtpUser || !env.mail?.smtpPass) {
+    throw new Error('SMTP credentials not configured (SMTP_USER / SMTP_PASS).');
+  }
 
-  const normalizedText =
-    text ||
-    html
-      .replace(/<style[\s\S]*?<\/style>/gi, ' ')
-      .replace(/<script[\s\S]*?<\/script>/gi, ' ')
-      .replace(/<[^>]+>/g, ' ')
-      .replace(/&nbsp;/gi, ' ')
-      .replace(/\s+/g, ' ')
-      .trim() ||
-    subject ||
-    'New message from Sirat';
+  const fromEmail = env.mail?.fromEmail || env.mail?.smtpUser;
+  const fromName = env.mail?.fromName || 'Sirat';
+  const normalizedText = text || htmlToText(html) || subject || 'New message from Sirat';
 
-  const payload = {
-    sender:
-      sender ||
-      {
-        name: env.mail?.fromName || 'Sirat',
-        email: env.mail?.fromEmail || env.mail?.smtpUser || 'no-reply@yourdomain.com'
-      },
-    to: Array.isArray(to) ? to : [to],
+  const mailOptions = {
+    from: sender || `${fromName} <${fromEmail}>`,
+    to: Array.isArray(to)
+      ? to.map((item) => (typeof item === 'string' ? item : item.email)).filter(Boolean).join(', ')
+      : (typeof to === 'string' ? to : to.email),
     subject,
-    htmlContent: html,
-      textContent: normalizedText
+    html,
+    text: normalizedText,
+    replyTo: replyTo || undefined
   };
 
-  const url = 'https://api.brevo.com/v3/smtp/email';
-  const headers = { 'api-key': apiKey };
-  return postJson(url, payload, headers);
+  return transporter.sendMail(mailOptions);
 }
 
 module.exports = { sendEmail };
