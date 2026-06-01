@@ -18,7 +18,8 @@ const getDashboardStats = async (req, res) => {
         orderCount: totalOrders.length,
         userCount: totalUsers,
         lowStockCount: lowStock,
-        recentOrders: totalOrders.slice(0, 5)
+        recentOrders: totalOrders.slice(0, 5),
+        recentProducts: totalProducts.slice(0, 5)
       }
     });
   } catch (error) {
