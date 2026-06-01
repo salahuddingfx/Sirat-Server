@@ -66,6 +66,7 @@ app.use("/api/reviews", require("./routes/review.routes"));
 app.use("/api/contact", require("./routes/contact.routes"));
 app.use("/api/coupons", require("./routes/coupon.routes"));
 app.use("/api/users", require("./routes/user.routes"));
+app.use("/api/newsletter", require("./routes/newsletter.routes"));
 app.use("/api/categories", require("./routes/category.routes"));
 
 const PORT = env.port;
