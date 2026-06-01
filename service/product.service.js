@@ -1,3 +1,4 @@
+const mongoose = require("mongoose");
 const Product = require("../models/product.model");
 const Order = require("../models/order.model");
 
@@ -5,8 +6,11 @@ const getAllProducts = async (query = {}) => {
   return await Product.find(query).sort({ createdAt: -1 });
 };
 
-const getProductById = async (id) => {
-  return await Product.findById(id);
+const getProductById = async (idOrSlug) => {
+  if (mongoose.Types.ObjectId.isValid(idOrSlug)) {
+    return await Product.findById(idOrSlug);
+  }
+  return await Product.findOne({ slug: idOrSlug });
 };
 
 const createProduct = async (productData) => {
