@@ -8,6 +8,8 @@ const productController = require("../controllers/product.controller");
 const upload = multer({ storage });
 
 router.get("/", productController.getProducts);
+router.get("/featured", productController.getFeaturedProducts);
+router.get("/best-seller", productController.getBestSeller);
 router.get("/:id", productController.getProduct);
 
 // Protected Admin Routes

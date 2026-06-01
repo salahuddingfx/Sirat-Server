@@ -54,10 +54,30 @@ const deleteProduct = async (req, res) => {
   }
 };
 
+const getFeaturedProducts = async (req, res) => {
+  try {
+    const products = await productService.getFeaturedProducts();
+    res.status(200).json({ success: true, data: products });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+const getBestSeller = async (req, res) => {
+  try {
+    const product = await productService.getBestSellerProduct();
+    res.status(200).json({ success: true, data: product });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 module.exports = {
   getProducts,
   getProduct,
   createProduct,
   updateProduct,
   deleteProduct,
+  getFeaturedProducts,
+  getBestSeller,
 };

@@ -6,19 +6,23 @@ const Category = require("../models/category.model");
 const categories = [
   {
     name: "Oversized",
-    image: "https://images.unsplash.com/photo-1483985988355-763728e1935b?q=80&w=600"
+    image: "https://images.unsplash.com/photo-1483985988355-763728e1935b?q=80&w=600",
+    featured: true
   },
   {
     name: "Custom Prints",
-    image: "https://images.unsplash.com/photo-1509631179647-0177331693ae?q=80&w=600"
+    image: "https://images.unsplash.com/photo-1509631179647-0177331693ae?q=80&w=600",
+    featured: true
   },
   {
     name: "Screen Prints",
-    image: "https://images.unsplash.com/photo-1496747611176-843222e1e57c?q=80&w=600"
+    image: "https://images.unsplash.com/photo-1496747611176-843222e1e57c?q=80&w=600",
+    featured: true
   },
   {
     name: "Essentials",
-    image: "https://images.unsplash.com/photo-1539109136881-3be0616acf4b?q=80&w=600"
+    image: "https://images.unsplash.com/photo-1539109136881-3be0616acf4b?q=80&w=600",
+    featured: true
   }
 ];
 
