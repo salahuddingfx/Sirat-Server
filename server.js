@@ -80,6 +80,7 @@ app.listen(PORT, () => {
 
   \x1b[1;35m» DEVELOPER:\x1b[0m \x1b[1mSalah Uddin Kader\x1b[0m
   \x1b[1;36m» SERVICE:\x1b[0m   \x1b[1mSIRAT REST API\x1b[0m
+  \x1b[1;33m» ENV:\x1b[0m       \x1b[1m${process.env.NODE_ENV || "development"}\x1b[0m
   \x1b[1;32m» PORT:\x1b[0m      \x1b[1;32m${PORT}\x1b[0m
   \x1b[1;34m» STATUS:\x1b[0m    \x1b[1mOnline & Listening\x1b[0m
   `;
