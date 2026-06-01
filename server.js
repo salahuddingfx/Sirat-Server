@@ -44,6 +44,10 @@ app.use("/api/products", require("./routes/product.routes"));
 app.use("/api/orders", require("./routes/order.routes"));
 app.use("/api/admin", require("./routes/admin.routes"));
 app.use("/api/settings", require("./routes/settings.routes"));
+app.use("/api/hero", require("./routes/hero.routes"));
+app.use("/api/reviews", require("./routes/review.routes"));
+app.use("/api/contact", require("./routes/contact.routes"));
+app.use("/api/coupons", require("./routes/coupon.routes"));
 
 const PORT = process.env.PORT || 5000;
 
