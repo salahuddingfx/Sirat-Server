@@ -41,7 +41,7 @@ productSchema.virtual("image").get(function () {
 });
 
 // Pre-save hook to generate slug and default variants
-productSchema.pre("save", function (next) {
+productSchema.pre("save", function () {
   if (this.isModified("name") && !this.slug) {
     this.slug = this.name
       .toLowerCase()
@@ -57,7 +57,6 @@ productSchema.pre("save", function (next) {
       inStock: true
     });
   }
-  next();
 });
 
 // Since variants is now a schema with its own virtuals, we need to handle it.
