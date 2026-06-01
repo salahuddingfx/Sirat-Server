@@ -16,10 +16,15 @@ const getSettings = async (req, res) => {
 const updateSettings = async (req, res) => {
   try {
     let settings = await Settings.findOne();
+    const updateData = { ...req.body };
+    if (req.file) {
+      updateData.logo = req.file.path; // Cloudinary URL
+    }
+    
     if (!settings) {
-      settings = await Settings.create(req.body);
+      settings = await Settings.create(updateData);
     } else {
-      settings = await Settings.findByIdAndUpdate(settings._id, req.body, { new: true, runValidators: true });
+      settings = await Settings.findByIdAndUpdate(settings._id, updateData, { new: true, runValidators: true });
     }
     res.status(200).json({ success: true, data: settings });
   } catch (error) {

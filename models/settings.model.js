@@ -9,7 +9,11 @@ const settingsSchema = new mongoose.Schema(
     instagram: { type: String, default: "https://instagram.com" },
     whatsapp: { type: String, default: "https://wa.me/8801700000000" },
     tagline: { type: String, default: "Purity in Every Step" },
-    description: { type: String, default: "আপনার পোশাকে আসুক শুদ্ধতার ছোঁয়া। আমরা বিশ্বাস করি কোয়ালিটি এবং সততায়। imported premium fabric এবং 100% combed cotton এ তৈরি কাস্টম প্রিন্টেড টি-শার্টের নির্ভরযোগ্য ঠিকানা।" }
+    description: { type: String, default: "আপনার পোশাকে আসুক শুদ্ধতার ছোঁয়া। আমরা বিশ্বাস করি কোয়ালিটি এবং সততায়। imported premium fabric এবং 100% combed cotton এ তৈরি কাস্টম প্রিন্টেড টি-শার্টের নির্ভরযোগ্য ঠিকানা।" },
+    logo: { type: String, default: "" },
+    bkashNumber: { type: String, default: "" },
+    nagadNumber: { type: String, default: "" },
+    rocketNumber: { type: String, default: "" }
   },
   { timestamps: true }
 );
