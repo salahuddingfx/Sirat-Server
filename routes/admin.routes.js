@@ -10,4 +10,30 @@ router.get("/stats", adminController.getDashboardStats);
 router.get("/orders", adminController.getAllOrders);
 router.patch("/orders/:id/status", adminController.updateOrderStatus);
 
+// Hero Slider Management
+const heroController = require("../controllers/hero.controller");
+router.get("/hero", heroController.adminGetAllSlides);
+router.post("/hero", heroController.adminCreateSlide);
+router.put("/hero/:id", heroController.adminUpdateSlide);
+router.delete("/hero/:id", heroController.adminDeleteSlide);
+
+// Review Moderation
+const reviewController = require("../controllers/review.controller");
+router.get("/reviews", reviewController.adminGetAllReviews);
+router.patch("/reviews/:id/approve", reviewController.adminUpdateReviewApproval);
+router.delete("/reviews/:id", reviewController.adminDeleteReview);
+
+// Contact Messages
+const contactController = require("../controllers/contact.controller");
+router.get("/contacts", contactController.adminGetAllContacts);
+router.patch("/contacts/:id/read", contactController.adminMarkAsRead);
+router.delete("/contacts/:id", contactController.adminDeleteContact);
+
+// Coupon Management
+const couponController = require("../controllers/coupon.controller");
+router.get("/coupons", couponController.adminGetAllCoupons);
+router.post("/coupons", couponController.adminCreateCoupon);
+router.put("/coupons/:id", couponController.adminUpdateCoupon);
+router.delete("/coupons/:id", couponController.adminDeleteCoupon);
+
 module.exports = router;
