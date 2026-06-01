@@ -72,6 +72,17 @@ app.use("/api/users", require("./routes/user.routes"));
 app.use("/api/newsletter", require("./routes/newsletter.routes"));
 app.use("/api/categories", require("./routes/category.routes"));
 
+// Global Error Handler
+app.use((err, req, res, next) => {
+  console.error(`[Error] ${err.stack}`);
+  const statusCode = err.statusCode || 500;
+  res.status(statusCode).json({
+    success: false,
+    message: err.message || "Internal Server Error",
+    stack: env.nodeEnv === "development" ? err.stack : undefined,
+  });
+});
+
 const PORT = env.port;
 
 app.listen(PORT, () => {
