@@ -3,7 +3,7 @@ const router = express.Router();
 const multer = require("multer");
 const { storage } = require("../config/cloudinary.config");
 const productController = require("../controllers/product.controller");
-// const { protect, admin } = require("../middleware/auth.middleware");
+const { protect, admin } = require("../middleware/auth.middleware");
 
 const upload = multer({ storage });
 
