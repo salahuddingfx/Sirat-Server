@@ -8,7 +8,10 @@ const registerUser = async (userData) => {
     throw new Error("User already exists");
   }
   const user = await User.create(userData);
-  return user;
+  const token = jwt.sign({ id: user._id, role: user.role }, process.env.JWT_SECRET, {
+    expiresIn: "30d",
+  });
+  return { user, token };
 };
 
 const loginUser = async (email, password) => {
