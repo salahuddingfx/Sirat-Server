@@ -61,6 +61,7 @@ const adminDeleteReview = async (req, res) => {
 module.exports = {
   createReview,
   getProductReviews,
+  getAllApprovedReviews,
   adminGetAllReviews,
   adminUpdateReviewApproval,
   adminDeleteReview,
