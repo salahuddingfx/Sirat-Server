@@ -2,7 +2,7 @@ require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
 const helmet = require("helmet");
-const mongoSanitize = require("express-mongo-sanitize");
+const mongoSanitize = require("./middleware/mongo-sanitize");
 const xss = require("xss-clean");
 const hpp = require("hpp");
 const rateLimit = require("express-rate-limit");
@@ -43,6 +43,7 @@ app.use("/api/auth", require("./routes/auth.routes"));
 app.use("/api/products", require("./routes/product.routes"));
 app.use("/api/orders", require("./routes/order.routes"));
 app.use("/api/admin", require("./routes/admin.routes"));
+app.use("/api/settings", require("./routes/settings.routes"));
 
 const PORT = process.env.PORT || 5000;
 
