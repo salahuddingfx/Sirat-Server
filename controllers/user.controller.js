@@ -24,8 +24,12 @@ const updateProfile = async (req, res) => {
       }
 
       if (addresses) {
-          // Addresses might be sent as string if multipart/form-data
-          user.addresses = typeof addresses === 'string' ? JSON.parse(addresses) : addresses;
+          try {
+              // Addresses might be sent as string if multipart/form-data
+              user.addresses = typeof addresses === 'string' ? JSON.parse(addresses) : addresses;
+          } catch (e) {
+              console.error("Failed to parse addresses:", addresses);
+          }
       }
 
       const updatedUser = await user.save();
@@ -37,7 +41,11 @@ const updateProfile = async (req, res) => {
       res.status(404).json({ success: false, message: "User not found" });
     }
   } catch (error) {
-    res.status(400).json({ success: false, message: error.message });
+    console.error("Profile Update Error:", error);
+    res.status(400).json({ 
+        success: false, 
+        message: error.code === 11000 ? "Username or Phone already exists." : error.message 
+    });
   }
 };
 
