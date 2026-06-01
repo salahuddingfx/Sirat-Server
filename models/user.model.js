@@ -12,6 +12,15 @@ const userSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
+// Virtual for id
+userSchema.virtual("id").get(function () {
+  return this._id.toHexString();
+});
+
+// Ensure virtuals are serialized
+userSchema.set("toJSON", { virtuals: true });
+userSchema.set("toObject", { virtuals: true });
+
 // Hash password before saving
 userSchema.pre("save", async function (next) {
   if (!this.isModified("password")) return next();
