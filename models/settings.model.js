@@ -13,7 +13,11 @@ const settingsSchema = new mongoose.Schema(
     logo: { type: String, default: "" },
     bkashNumber: { type: String, default: "" },
     nagadNumber: { type: String, default: "" },
-    rocketNumber: { type: String, default: "" }
+    rocketNumber: { type: String, default: "" },
+    pinterest: { type: String, default: "" },
+    youtube: { type: String, default: "" },
+    tiktok: { type: String, default: "" },
+    twitter: { type: String, default: "" }
   },
   { timestamps: true }
 );
