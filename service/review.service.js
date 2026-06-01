@@ -27,6 +27,7 @@ const deleteReview = async (id) => {
 module.exports = {
   createReview,
   getProductReviews,
+  getAllApprovedReviews,
   getAllReviews,
   updateReviewApproval,
   deleteReview,
