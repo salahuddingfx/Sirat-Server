@@ -1,6 +1,7 @@
 const orderService = require("../service/order.service");
 const productService = require("../service/product.service");
 const User = require("../models/user.model");
+const { sendStatusUpdateEmail } = require("../service/mail.service");
 
 const getDashboardStats = async (req, res) => {
   try {
