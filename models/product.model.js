@@ -33,6 +33,22 @@ productSchema.virtual("id").get(function () {
   return this._id.toHexString();
 });
 
+// Virtual for primary image
+productSchema.virtual("image").get(function () {
+  return this.images && this.images.length > 0 ? this.images[0] : null;
+});
+
+// Pre-save hook to generate slug
+productSchema.pre("save", function (next) {
+  if (this.isModified("name") && !this.slug) {
+    this.slug = this.name
+      .toLowerCase()
+      .replace(/[^\w ]+/g, "")
+      .replace(/ +/g, "-");
+  }
+  next();
+});
+
 // Since variants is now a schema with its own virtuals, we need to handle it.
 // Actually, Mongoose subdocs usually handle 'id' virtual automatically if 'id: true' is set.
 // But let's be explicit if needed.
