@@ -36,4 +36,9 @@ router.post("/coupons", couponController.adminCreateCoupon);
 router.put("/coupons/:id", couponController.adminUpdateCoupon);
 router.delete("/coupons/:id", couponController.adminDeleteCoupon);
 
+// User Management
+router.get("/users", adminController.getAllUsers);
+router.patch("/users/:id/role", adminController.updateUserRole);
+router.delete("/users/:id", adminController.deleteUser);
+
 module.exports = router;
