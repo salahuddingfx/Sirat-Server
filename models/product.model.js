@@ -10,6 +10,16 @@ const productSchema = new mongoose.Schema(
     stock: { type: Number, default: 0 },
     status: { type: String, enum: ["Live", "Alert", "Draft"], default: "Live" },
     weight: { type: Number, default: 0.35 }, // Weight in kg for shipping calculation
+    slug: { type: String, unique: true },
+    rating: { type: Number, default: 0 },
+    featured: { type: Boolean, default: false },
+    variants: [
+      {
+        label: { type: String, required: true },
+        priceDelta: { type: Number, default: 0 },
+        inStock: { type: Boolean, default: true }
+      }
+    ]
   },
   { timestamps: true }
 );
