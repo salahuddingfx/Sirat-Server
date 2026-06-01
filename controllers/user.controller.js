@@ -18,8 +18,14 @@ const updateProfile = async (req, res) => {
       user.name = name || user.name;
       user.phone = phone || user.phone;
       user.username = username || user.username;
+      
+      if (req.file) {
+          user.avatar = req.file.path; // Cloudinary URL
+      }
+
       if (addresses) {
-          user.addresses = addresses;
+          // Addresses might be sent as string if multipart/form-data
+          user.addresses = typeof addresses === 'string' ? JSON.parse(addresses) : addresses;
       }
 
       const updatedUser = await user.save();
