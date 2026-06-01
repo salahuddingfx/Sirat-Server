@@ -1,4 +1,4 @@
-require("dotenv").config();
+const env = require("./config/env.config");
 const express = require("express");
 const cors = require("cors");
 const helmet = require("helmet");
@@ -67,7 +67,7 @@ app.use("/api/contact", require("./routes/contact.routes"));
 app.use("/api/coupons", require("./routes/coupon.routes"));
 app.use("/api/users", require("./routes/user.routes"));
 
-const PORT = process.env.PORT || 5000;
+const PORT = env.port;
 
 app.listen(PORT, () => {
   const banner = `
@@ -80,7 +80,7 @@ app.listen(PORT, () => {
 
   \x1b[1;35m» DEVELOPER:\x1b[0m \x1b[1mSalah Uddin Kader\x1b[0m
   \x1b[1;36m» SERVICE:\x1b[0m   \x1b[1mSIRAT REST API\x1b[0m
-  \x1b[1;33m» ENV:\x1b[0m       \x1b[1m${process.env.NODE_ENV || "development"}\x1b[0m
+  \x1b[1;33m» ENV:\x1b[0m       \x1b[1m${env.nodeEnv}\x1b[0m
   \x1b[1;32m» PORT:\x1b[0m      \x1b[1;32m${PORT}\x1b[0m
   \x1b[1;34m» STATUS:\x1b[0m    \x1b[1mOnline & Listening\x1b[0m
   `;
