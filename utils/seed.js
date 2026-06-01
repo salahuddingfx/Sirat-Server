@@ -1,6 +1,26 @@
 const mongoose = require("mongoose");
 const env = require("../config/env.config");
 const Product = require("../models/product.model");
+const Category = require("../models/category.model");
+
+const categories = [
+  {
+    name: "Oversized",
+    image: "https://images.unsplash.com/photo-1483985988355-763728e1935b?q=80&w=600"
+  },
+  {
+    name: "Custom Prints",
+    image: "https://images.unsplash.com/photo-1509631179647-0177331693ae?q=80&w=600"
+  },
+  {
+    name: "Screen Prints",
+    image: "https://images.unsplash.com/photo-1496747611176-843222e1e57c?q=80&w=600"
+  },
+  {
+    name: "Essentials",
+    image: "https://images.unsplash.com/photo-1539109136881-3be0616acf4b?q=80&w=600"
+  }
+];
 
 const products = [
   {
@@ -127,11 +147,17 @@ const seedDB = async () => {
     }
     console.log("Connecting to database...");
     await mongoose.connect(env.mongoUri);
-    console.log("Database connected. Clearing existing products...");
+    console.log("Database connected. Clearing existing products and categories...");
     await Product.deleteMany({});
+    await Category.deleteMany({});
+    
+    console.log("Seeding new categories...");
+    await Category.create(categories);
+    
     console.log("Seeding new products...");
     await Product.create(products);
-    console.log("Database seeded successfully with premium items!");
+    
+    console.log("Database seeded successfully with premium items and categories!");
     mongoose.connection.close();
     process.exit(0);
   } catch (error) {
