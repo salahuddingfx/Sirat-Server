@@ -1,4 +1,4 @@
-const orderService = require("../service/order.services");
+const orderService = require("../service/order.service");
 const { sendOrderEmails } = require("../service/mail.service");
 
 const placeOrder = async (req, res) => {

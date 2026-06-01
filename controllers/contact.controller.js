@@ -1,4 +1,4 @@
-const contactService = require("../service/contact.services");
+const contactService = require("../service/contact.service");
 const { sendContactNotification } = require("../service/mail.service");
 
 const submitContactForm = async (req, res) => {

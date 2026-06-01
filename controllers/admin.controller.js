@@ -1,5 +1,5 @@
-const orderService = require("../service/order.services");
-const productService = require("../service/product.services");
+const orderService = require("../service/order.service");
+const productService = require("../service/product.service");
 const User = require("../models/user.model");
 
 const getDashboardStats = async (req, res) => {
