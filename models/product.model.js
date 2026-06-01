@@ -38,13 +38,22 @@ productSchema.virtual("image").get(function () {
   return this.images && this.images.length > 0 ? this.images[0] : null;
 });
 
-// Pre-save hook to generate slug
+// Pre-save hook to generate slug and default variants
 productSchema.pre("save", function (next) {
   if (this.isModified("name") && !this.slug) {
     this.slug = this.name
       .toLowerCase()
       .replace(/[^\w ]+/g, "")
       .replace(/ +/g, "-");
+  }
+  
+  // Add default variant if empty
+  if (!this.variants || this.variants.length === 0) {
+    this.variants.push({
+      label: "M",
+      priceDelta: 0,
+      inStock: true
+    });
   }
   next();
 });
