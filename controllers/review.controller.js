@@ -27,7 +27,6 @@ const getAllApprovedReviews = async (req, res) => {
     const reviews = await reviewService.getAllApprovedReviews();
     res.status(200).json({ success: true, data: reviews });
   } catch (error) {
-    console.error("Error in getAllApprovedReviews:", error);
     res.status(500).json({ success: false, message: error.message });
   }
 };
