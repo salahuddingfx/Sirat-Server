@@ -28,6 +28,23 @@ const limiter = rateLimit({
 });
 app.use("/api", limiter);
 
+// Request/Response Logger Middleware
+app.use((req, res, next) => {
+  const start = Date.now();
+  res.on("finish", () => {
+    const duration = Date.now() - start;
+    let statusColor = "\x1b[32m"; // Green for 2xx
+    if (res.statusCode >= 500) statusColor = "\x1b[31m"; // Red for 5xx
+    else if (res.statusCode >= 400) statusColor = "\x1b[33m"; // Yellow for 4xx
+    else if (res.statusCode >= 300) statusColor = "\x1b[36m"; // Cyan for 3xx
+    
+    console.log(
+      `[\x1b[35m${new Date().toLocaleTimeString()}\x1b[0m] \x1b[1m${req.method}\x1b[0m ${req.originalUrl} - ${statusColor}${res.statusCode}\x1b[0m (${duration}ms)`
+    );
+  });
+  next();
+});
+
 // Middleware
 app.use(cors());
 app.use(express.json());
@@ -53,14 +70,29 @@ app.use("/api/users", require("./routes/user.routes"));
 const PORT = process.env.PORT || 5000;
 
 app.listen(PORT, () => {
-  console.log(`
+  const banner = `
 \x1b[38;5;178m ███████╗██╗██████╗  █████╗ ████████╗
  ██╔════╝██║██╔══██╗██╔══██╗╚══██╔══╝
  ███████╗██║██████╔╝███████║   ██║   
  ╚════██║██║██╔══██╗██╔══██║   ██║   
  ███████║██║██║  ██║██║  ██║   ██║   
  ╚══════╝╚═╝╚═╝  ╚═╝╚═╝  ╚═╝   ╚═╝\x1b[0m
-  \x1b[1mSIRAT SERVER\x1b[0m is active on port: \x1b[1;32m${PORT}\x1b[0m
-  `);
+
+  \x1b[1;35m» DEVELOPER:\x1b[0m \x1b[1mSalah Uddin Kader\x1b[0m
+  \x1b[1;36m» SERVICE:\x1b[0m   \x1b[1mSIRAT REST API\x1b[0m
+  \x1b[1;32m» PORT:\x1b[0m      \x1b[1;32m${PORT}\x1b[0m
+  \x1b[1;34m» STATUS:\x1b[0m    \x1b[1mOnline & Listening\x1b[0m
+  `;
+  
+  const lines = banner.split("\n");
+  let idx = 0;
+  function showLine() {
+    if (idx < lines.length) {
+      console.log(lines[idx]);
+      idx++;
+      setTimeout(showLine, 40); // 40ms per line animation
+    }
+  }
+  showLine();
 });
 
