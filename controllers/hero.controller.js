@@ -1,4 +1,4 @@
-const heroService = require("../services/hero.services");
+const heroService = require("../service/hero.services");
 
 const getHeroSlides = async (req, res) => {
   try {

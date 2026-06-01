@@ -1,27 +1,13 @@
-const contactService = require("../services/contact.services");
-const Settings = require("../models/settings.model");
-const { sendEmail } = require("../utils/mailer");
+const contactService = require("../service/contact.services");
+const { sendContactNotification } = require("../service/mail.service");
 
 const submitContactForm = async (req, res) => {
   try {
     const contact = await contactService.createContact(req.body);
 
-    // Notify site admin via email (best-effort, non-blocking)
     (async () => {
       try {
-        const settings = await Settings.findOne() || {};
-        const adminEmail = settings.email || process.env.SMTP_USER;
-        if (adminEmail) {
-          await sendEmail({
-            to: [{ email: adminEmail }],
-            subject: `New contact form from ${contact.name}`,
-            html: `<p><strong>Name:</strong> ${contact.name}</p>
-                   <p><strong>Email:</strong> ${contact.email}</p>
-                   <p><strong>Message:</strong></p>
-                   <p>${contact.message}</p>`,
-            replyTo: contact.email
-          });
-        }
+        await sendContactNotification(contact);
       } catch (e) {
         console.error('Failed to send contact notification email:', e.message || e);
       }

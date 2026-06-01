@@ -1,4 +1,4 @@
-const couponService = require("../services/coupon.services");
+const couponService = require("../service/coupon.services");
 
 const validateCoupon = async (req, res) => {
   try {

@@ -30,7 +30,7 @@ function htmlToText(html = '') {
  * Send transactional email over SMTP relay.
  * @param {{to: {email:string,name?:string}[]|{email:string,name?:string}, subject:string, html:string, text?:string, sender?: {email:string,name?:string}, replyTo?: string}} options
  */
-async function sendEmail({ to = [], subject = '', html = '', text = '', sender = null, replyTo = null }) {
+async function sendEmail({ to = [], subject = '', html = '', text = '', sender = null, replyTo = null, attachments = [] }) {
   if (!env.mail?.smtpUser || !env.mail?.smtpPass) {
     throw new Error('SMTP credentials not configured (SMTP_USER / SMTP_PASS).');
   }
@@ -47,7 +47,8 @@ async function sendEmail({ to = [], subject = '', html = '', text = '', sender =
     subject,
     html,
     text: normalizedText,
-    replyTo: replyTo || undefined
+    replyTo: replyTo || undefined,
+    attachments: Array.isArray(attachments) ? attachments : []
   };
 
   return transporter.sendMail(mailOptions);
