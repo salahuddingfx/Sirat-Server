@@ -18,5 +18,6 @@ router.post("/", (req, res, next) => {
 }, reviewController.createReview);
 
 router.get("/product/:productId", reviewController.getProductReviews);
+router.get("/", reviewController.getAllApprovedReviews);
 
 module.exports = router;
