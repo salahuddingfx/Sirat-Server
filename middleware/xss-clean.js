@@ -1,4 +1,6 @@
-function cleanValue(value) {
+function cleanValue(value, key) {
+  if (key === 'password') return value;
+  
   if (typeof value === 'string') {
     return value
       .replace(/&/g, '&amp;')
@@ -13,8 +15,8 @@ function cleanValue(value) {
     return value.map(item => cleanValue(item));
   }
   if (value && typeof value === 'object') {
-    for (const key in value) {
-      value[key] = cleanValue(value[key]);
+    for (const k in value) {
+      value[k] = cleanValue(value[k], k);
     }
   }
   return value;
