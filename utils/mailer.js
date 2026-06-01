@@ -50,6 +50,18 @@ async function sendEmail({ to = [], subject = '', html = '', text = '', sender =
   const apiKey = env.mail?.brevoApiKey;
   if (!apiKey) throw new Error('Brevo API key not configured (BREVO_API_KEY).');
 
+  const normalizedText =
+    text ||
+    html
+      .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+      .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/&nbsp;/gi, ' ')
+      .replace(/\s+/g, ' ')
+      .trim() ||
+    subject ||
+    'New message from Sirat';
+
   const payload = {
     sender:
       sender ||
@@ -60,7 +72,7 @@ async function sendEmail({ to = [], subject = '', html = '', text = '', sender =
     to: Array.isArray(to) ? to : [to],
     subject,
     htmlContent: html,
-    textContent: text
+      textContent: normalizedText
   };
 
   const url = 'https://api.brevo.com/v3/smtp/email';
