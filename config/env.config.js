@@ -16,6 +16,8 @@ const env = {
     smtpPort: process.env.SMTP_PORT,
     smtpUser: process.env.SMTP_USER,
     smtpPass: process.env.SMTP_PASS,
+    fromEmail: process.env.MAIL_FROM_EMAIL,
+    fromName: process.env.MAIL_FROM_NAME,
     brevoApiKey: process.env.BREVO_API_KEY
   }
 };

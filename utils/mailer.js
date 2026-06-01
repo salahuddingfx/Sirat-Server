@@ -51,7 +51,12 @@ async function sendEmail({ to = [], subject = '', html = '', text = '', sender =
   if (!apiKey) throw new Error('Brevo API key not configured (BREVO_API_KEY).');
 
   const payload = {
-    sender: sender || { name: 'Sirat', email: env.mail?.smtpUser || 'no-reply@yourdomain.com' },
+    sender:
+      sender ||
+      {
+        name: env.mail?.fromName || 'Sirat',
+        email: env.mail?.fromEmail || env.mail?.smtpUser || 'no-reply@yourdomain.com'
+      },
     to: Array.isArray(to) ? to : [to],
     subject,
     htmlContent: html,
