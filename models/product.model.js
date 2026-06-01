@@ -14,11 +14,15 @@ const productSchema = new mongoose.Schema(
     rating: { type: Number, default: 0 },
     featured: { type: Boolean, default: false },
     variants: [
-      {
+      new mongoose.Schema({
         label: { type: String, required: true },
         priceDelta: { type: Number, default: 0 },
         inStock: { type: Boolean, default: true }
-      }
+      }, {
+        toJSON: { virtuals: true },
+        toObject: { virtuals: true },
+        id: true // This automatically maps _id to id for subdocs if configured
+      })
     ]
   },
   { timestamps: true }
@@ -28,6 +32,10 @@ const productSchema = new mongoose.Schema(
 productSchema.virtual("id").get(function () {
   return this._id.toHexString();
 });
+
+// Since variants is now a schema with its own virtuals, we need to handle it.
+// Actually, Mongoose subdocs usually handle 'id' virtual automatically if 'id: true' is set.
+// But let's be explicit if needed.
 
 // Ensure virtuals are serialized
 productSchema.set("toJSON", { virtuals: true });
