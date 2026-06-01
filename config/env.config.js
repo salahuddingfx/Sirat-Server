@@ -10,6 +10,14 @@ const env = {
     apiKey: process.env.CLOUDINARY_API_KEY,
     apiSecret: process.env.CLOUDINARY_API_SECRET
   }
+  ,
+  mail: {
+    smtpHost: process.env.SMTP_HOST,
+    smtpPort: process.env.SMTP_PORT,
+    smtpUser: process.env.SMTP_USER,
+    smtpPass: process.env.SMTP_PASS,
+    brevoApiKey: process.env.BREVO_API_KEY
+  }
 };
 
 // Validate that critical env variables are loaded
