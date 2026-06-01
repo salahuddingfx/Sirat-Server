@@ -22,6 +22,15 @@ const getProductReviews = async (req, res) => {
   }
 };
 
+const getAllApprovedReviews = async (req, res) => {
+  try {
+    const reviews = await reviewService.getAllApprovedReviews();
+    res.status(200).json({ success: true, data: reviews });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 const adminGetAllReviews = async (req, res) => {
   try {
     const reviews = await reviewService.getAllReviews();
