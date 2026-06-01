@@ -1,6 +1,7 @@
 function sanitizeObject(obj) {
   if (obj && typeof obj === 'object') {
     for (const key in obj) {
+      if (key === 'password') continue;
       if (key.startsWith('$') || key.includes('.')) {
         delete obj[key];
       } else {
