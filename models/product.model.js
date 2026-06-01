@@ -24,4 +24,13 @@ const productSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
+// Virtual for id
+productSchema.virtual("id").get(function () {
+  return this._id.toHexString();
+});
+
+// Ensure virtuals are serialized
+productSchema.set("toJSON", { virtuals: true });
+productSchema.set("toObject", { virtuals: true });
+
 module.exports = mongoose.model("Product", productSchema);
