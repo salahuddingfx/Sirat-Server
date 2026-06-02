@@ -11,6 +11,11 @@ const connectDB = require("./config/db.config");
 
 const app = express();
 
+// Global unhandled rejection handler (prevents crash on promise rejections)
+process.on("unhandledRejection", (reason) => {
+  console.error("[Unhandled Rejection]", reason);
+});
+
 // Connect to Database
 connectDB();
 
