@@ -39,6 +39,10 @@ router.delete("/coupons/:id", couponController.adminDeleteCoupon);
 // Payment Approval
 router.patch("/orders/:id/payment-status", adminController.updatePaymentStatus);
 
+// Order Detail Management
+router.get("/orders/:id", adminController.getOrderById);
+router.patch("/orders/:id/details", adminController.updateOrderDetails);
+
 // Flash Sale Management
 const flashSaleController = require("../controllers/flashSale.controller");
 router.get("/flash-sale", flashSaleController.adminGetFlashSale);
