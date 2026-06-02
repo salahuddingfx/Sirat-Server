@@ -33,8 +33,8 @@ app.use(compression()); // Compress all responses
 
 // Rate limiting
 const limiter = rateLimit({
-  windowMs: 10 * 60 * 1000, // 10 minutes
-  max: 100 // limit each IP to 100 requests per windowMs
+  windowMs: env.rateLimit.windowMs,
+  max: env.rateLimit.max,
 });
 app.use("/api", limiter);
 
@@ -47,7 +47,7 @@ app.use((req, res, next) => {
     if (res.statusCode >= 500) statusColor = "\x1b[31m"; // Red for 5xx
     else if (res.statusCode >= 400) statusColor = "\x1b[33m"; // Yellow for 4xx
     else if (res.statusCode >= 300) statusColor = "\x1b[36m"; // Cyan for 3xx
-    
+
     console.log(
       `[\x1b[35m${new Date().toLocaleTimeString()}\x1b[0m] \x1b[1m${req.method}\x1b[0m ${req.originalUrl} - ${statusColor}${res.statusCode}\x1b[0m (${duration}ms)`
     );
@@ -57,12 +57,12 @@ app.use((req, res, next) => {
 
 // Middleware
 app.use(cors({
-  origin: process.env.CORS_ORIGIN ? process.env.CORS_ORIGIN.split(",") : ["http://localhost:3000", "http://localhost:5173", "http://localhost:5174"],
+  origin: env.corsOrigins,
   credentials: true,
 }));
 
-app.use(express.json({ limit: "10kb" }));
-app.use(express.urlencoded({ extended: true, limit: "10kb" }));
+app.use(express.json({ limit: env.body.jsonLimit }));
+app.use(express.urlencoded({ extended: true, limit: env.body.jsonLimit }));
 
 // Basic Route
 app.get("/", (req, res) => {
@@ -112,6 +112,8 @@ app.listen(PORT, () => {
   \x1b[1;32m» PORT:\x1b[0m      \x1b[1;32m${PORT}\x1b[0m
   \x1b[1;34m» STATUS:\x1b[0m    \x1b[1;34mOnline & Listening\x1b[0m
   \x1b[1;36m» CACHE:\x1b[0m     \x1b[1mIn-memory cache enabled (ETag active)\x1b[0m
+  \x1b[1;35m» CORS:\x1b[0m      \x1b[1m${env.corsOrigins.join(", ")}\x1b[0m
+  \x1b[1;33m» RATE LIMIT:\x1b[0m \x1b[1m${env.rateLimit.max} req / ${Math.round(env.rateLimit.windowMs / 1000)}s\x1b[0m
   `;
   
   const lines = banner.split("\n");
