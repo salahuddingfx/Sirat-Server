@@ -168,4 +168,6 @@ module.exports = {
   getAllUsers,
   updateUserRole,
   deleteUser,
+  getCacheStats,
+  flushCache,
 };
