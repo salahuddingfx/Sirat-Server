@@ -95,6 +95,23 @@ const deleteUser = async (req, res) => {
   }
 };
 
+const getCacheStats = async (req, res) => {
+  try {
+    res.status(200).json({ success: true, data: cache.stats() });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+const flushCache = async (req, res) => {
+  try {
+    cache.flush();
+    res.status(200).json({ success: true, message: "Cache flushed" });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 const updatePaymentStatus = async (req, res) => {
   try {
     const { paymentStatus } = req.body;
