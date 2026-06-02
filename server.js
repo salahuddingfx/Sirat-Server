@@ -11,10 +11,18 @@ const connectDB = require("./config/db.config");
 
 const app = express();
 
-// Disable ETag generation so responses are always 200 (not 304 Not Modified)
-app.disable("etag");
-// Remove Last-Modified header to prevent conditional 304 responses
-app.set("etag", false);
+// ETag handling:
+// - Development: disable ETag and Last-Modified so responses are always 200
+//   (cleaner logs; cache.config.js handles freshness in-memory)
+// - Production: keep ETag/Last-Modified enabled for proper 304 Not Modified
+//   responses (saves bandwidth for clients that send If-None-Match)
+if (env.nodeEnv === "development") {
+  app.disable("etag");
+  app.set("etag", false);
+} else {
+  app.enable("etag");
+  app.set("etag", "strong");
+}
 
 // Global unhandled rejection handler (prevents crash on promise rejections)
 process.on("unhandledRejection", (reason) => {
@@ -55,45 +63,52 @@ app.use((req, res, next) => {
   next();
 });
 
-// Strip conditional request headers so Express never responds with 304
-// Also strip ETag and Last-Modified from outgoing responses
-app.use((req, res, next) => {
-  delete req.headers["if-none-match"];
-  delete req.headers["if-modified-since"];
-  delete req.headers["if-match"];
-  delete req.headers["if-unmodified-since"];
-  delete req.headers["if-range"];
+// Strip conditional request headers so Express never responds with 304 (dev only)
+// In production, keep ETag/If-None-Match so 304 Not Modified can be returned
+// to save bandwidth.
+if (env.nodeEnv === "development") {
+  app.use((req, res, next) => {
+    delete req.headers["if-none-match"];
+    delete req.headers["if-modified-since"];
+    delete req.headers["if-match"];
+    delete req.headers["if-unmodified-since"];
+    delete req.headers["if-range"];
 
-  const originalSetHeader = res.setHeader.bind(res);
-  res.setHeader = function (name, value) {
-    if (typeof name === "string") {
-      const lower = name.toLowerCase();
-      if (lower === "etag" || lower === "last-modified") {
-        return res;
+    const originalSetHeader = res.setHeader.bind(res);
+    res.setHeader = function (name, value) {
+      if (typeof name === "string") {
+        const lower = name.toLowerCase();
+        if (lower === "etag" || lower === "last-modified") {
+          return res;
+        }
       }
-    }
-    return originalSetHeader(name, value);
-  };
+      return originalSetHeader(name, value);
+    };
 
-  next();
-});
+    next();
+  });
+}
 
 // Middleware
 app.use(cors({
   origin: process.env.CORS_ORIGIN ? process.env.CORS_ORIGIN.split(",") : ["http://localhost:3000", "http://localhost:5173", "http://localhost:5174"],
   credentials: true,
-  optionsSuccessStatus: 200, // Return 200 for OPTIONS preflight instead of 204
+  // In dev: force 200 for OPTIONS preflight instead of 204
+  // In production: leave default (204 for legacy compat, but modern browsers accept 200)
+  optionsSuccessStatus: env.nodeEnv === "development" ? 200 : 204,
 }));
 
-// Intercept all OPTIONS (CORS preflight) requests after CORS headers are set
-// and return 200 instead of letting it fall through with 204
-app.use((req, res, next) => {
-  if (req.method === "OPTIONS") {
-    res.status(200).end();
-    return;
-  }
-  next();
-});
+// Intercept all OPTIONS (CORS preflight) requests in dev only,
+// return 200 instead of letting it fall through with 204.
+if (env.nodeEnv === "development") {
+  app.use((req, res, next) => {
+    if (req.method === "OPTIONS") {
+      res.status(200).end();
+      return;
+    }
+    next();
+  });
+}
 
 app.use(express.json({ limit: "10kb" }));
 app.use(express.urlencoded({ extended: true, limit: "10kb" }));
