@@ -31,8 +31,15 @@ app.use(xss()); // Prevent XSS attacks
 app.use(hpp()); // Prevent HTTP Parameter Pollution
 app.use(compression()); // Compress all responses
 
-// Public tracking endpoint (exempt from /api rate limit to avoid blocking analytics from many tabs/IPs)
-app.use("/api/track", require("./routes/track.routes"));
+// Public tracking endpoint with its own more-lenient rate limit
+// (each pageview shouldn't compete with auth/data API quota)
+const trackLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 300,
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+app.use("/api/track", trackLimiter, require("./routes/track.routes"));
 
 // Rate limiting
 const limiter = rateLimit({
