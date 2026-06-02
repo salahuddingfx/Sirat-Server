@@ -9,7 +9,7 @@ const getNextSequenceValue = async (sequenceName) => {
   const result = await Counter.findOneAndUpdate(
     { id: sequenceName },
     { $inc: { seq: 1 } },
-    { new: true, upsert: true }
+    { returnDocument: "after", upsert: true }
   );
   return result.seq;
 };
@@ -34,7 +34,7 @@ const createOrder = async (orderData) => {
         const updatedProduct = await Product.findOneAndUpdate(
           { _id: item.product, variants: { $elemMatch: { label: item.variant, stock: { $gte: item.quantity } } } },
           { $inc: { "variants.$.stock": -item.quantity } },
-          { new: true }
+          { returnDocument: "after" }
         );
         if (!updatedProduct) {
           throw new Error(`Variant "${item.variant}" stock changed due to a concurrent order. Please try again.`);
@@ -98,7 +98,7 @@ const updateOrderStatus = async (id, status) => {
         const updatedProduct = await Product.findOneAndUpdate(
           { _id: item.product, stock: { $gte: item.quantity } },
           { $inc: { stock: -item.quantity } },
-          { new: true }
+          { returnDocument: "after" }
         );
         if (!updatedProduct) {
           throw new Error(`Product stock changed due to a concurrent order. Please try again.`);
