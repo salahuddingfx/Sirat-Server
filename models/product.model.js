@@ -22,7 +22,7 @@ const productSchema = new mongoose.Schema(
       new mongoose.Schema({
         label: { type: String, required: true },
         priceDelta: { type: Number, default: 0 },
-        inStock: { type: Boolean, default: true }
+        stock: { type: Number, default: 0 }
       }, {
         toJSON: { virtuals: true },
         toObject: { virtuals: true },
@@ -57,7 +57,7 @@ productSchema.pre("save", function () {
     this.variants.push({
       label: "M",
       priceDelta: 0,
-      inStock: true
+      stock: 10
     });
   }
 });
