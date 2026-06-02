@@ -1,0 +1,25 @@
+◇ injected env (21) from .env // tip: ⌘ override existing { override: true }
+
+[38;5;178m ███████╗██╗██████╗  █████╗ ████████╗
+ ██╔════╝██║██╔══██╗██╔══██╗╚══██╔══╝
+ ███████╗██║██████╔╝███████║   ██║   
+ ╚════██║██║██╔══██╗██╔══██║   ██║   
+ ███████║██║██║  ██║██║  ██║   ██║   
+ ╚══════╝╚═╝╚═╝  ╚═╝╚═╝  ╚═╝   ╚═╝[0m
+
+  [1;35m» DEVELOPER:[0m [1mSalah Uddin Kader[0m
+  [1;36m» SERVICE:[0m   [1mSIRAT REST API[0m
+  [1;33m» ENV:[0m       [1mdevelopment[0m
+  [1;33m» DATABASE:[0m   [1;32mConnected & Synced[0m
+  [1;32m» PORT:[0m      [1;32m5000[0m
+  [1;34m» STATUS:[0m    [1;34mOnline & Listening[0m
+  [1;36m» CACHE:[0m     [1mIn-memory cache enabled (ETag active)[0m
+  [1;35m» CORS:[0m      [1mhttp://localhost:3000, http://localhost:5173, http://localhost:5174[0m
+  [1;33m» RATE LIMIT:[0m [1m100 req / 600s[0m
+  
+[[35m11:12:56 PM[0m] [1mOPTIONS[0m /api/admin/analytics/live?limit=50 - [32m204[0m (5ms)
+[[35m11:12:56 PM[0m] [1mGET[0m /api/admin/analytics/live?limit=50 - [36m304[0m (123ms)
+[[35m11:13:56 PM[0m] [1mOPTIONS[0m /api/admin/analytics/live?limit=50 - [32m204[0m (0ms)
+[[35m11:13:56 PM[0m] [1mGET[0m /api/admin/analytics/live?limit=50 - [36m304[0m (110ms)
+[[35m11:14:56 PM[0m] [1mOPTIONS[0m /api/admin/analytics/live?limit=50 - [32m204[0m (1ms)
+[[35m11:14:56 PM[0m] [1mGET[0m /api/admin/analytics/live?limit=50 - [36m304[0m (119ms)
