@@ -78,7 +78,15 @@ app.use((req, res, next) => {
   next();
 });
 
-// Intercept all OPTIONS (CORS preflight) requests and return 200 instead of 204
+// Middleware
+app.use(cors({
+  origin: process.env.CORS_ORIGIN ? process.env.CORS_ORIGIN.split(",") : ["http://localhost:3000", "http://localhost:5173", "http://localhost:5174"],
+  credentials: true,
+  optionsSuccessStatus: 200, // Return 200 for OPTIONS preflight instead of 204
+}));
+
+// Intercept all OPTIONS (CORS preflight) requests after CORS headers are set
+// and return 200 instead of letting it fall through with 204
 app.use((req, res, next) => {
   if (req.method === "OPTIONS") {
     res.status(200).end();
@@ -87,11 +95,6 @@ app.use((req, res, next) => {
   next();
 });
 
-// Middleware
-app.use(cors({
-  origin: process.env.CORS_ORIGIN ? process.env.CORS_ORIGIN.split(",") : ["http://localhost:3000", "http://localhost:5173", "http://localhost:5174"],
-  credentials: true,
-}));
 app.use(express.json({ limit: "10kb" }));
 app.use(express.urlencoded({ extended: true, limit: "10kb" }));
 
