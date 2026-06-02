@@ -31,23 +31,6 @@ app.use(xss()); // Prevent XSS attacks
 app.use(hpp()); // Prevent HTTP Parameter Pollution
 app.use(compression()); // Compress all responses
 
-// Public tracking endpoint with its own more-lenient rate limit
-// (each pageview shouldn't compete with auth/data API quota)
-const trackLimiter = rateLimit({
-  windowMs: 60 * 1000,
-  max: 300,
-  standardHeaders: true,
-  legacyHeaders: false,
-});
-app.use("/api/track", trackLimiter, require("./routes/track.routes"));
-
-// Rate limiting
-const limiter = rateLimit({
-  windowMs: env.rateLimit.windowMs,
-  max: env.rateLimit.max,
-});
-app.use("/api", limiter);
-
 // Request/Response Logger Middleware
 app.use((req, res, next) => {
   const start = Date.now();
@@ -71,8 +54,26 @@ app.use(cors({
   credentials: true,
 }));
 
+// Body parsers MUST be registered before any route that needs a body
 app.use(express.json({ limit: env.body.jsonLimit }));
 app.use(express.urlencoded({ extended: true, limit: env.body.jsonLimit }));
+
+// Public tracking endpoint with its own more-lenient rate limit
+// (each pageview shouldn't compete with auth/data API quota)
+const trackLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 300,
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+app.use("/api/track", trackLimiter, require("./routes/track.routes"));
+
+// Rate limiting for all other API routes
+const limiter = rateLimit({
+  windowMs: env.rateLimit.windowMs,
+  max: env.rateLimit.max,
+});
+app.use("/api", limiter);
 
 // Basic Route
 app.get("/", (req, res) => {
