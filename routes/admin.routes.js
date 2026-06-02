@@ -36,6 +36,9 @@ router.post("/coupons", couponController.adminCreateCoupon);
 router.put("/coupons/:id", couponController.adminUpdateCoupon);
 router.delete("/coupons/:id", couponController.adminDeleteCoupon);
 
+// Payment Approval
+router.patch("/orders/:id/payment-status", adminController.updatePaymentStatus);
+
 // Flash Sale Management
 const flashSaleController = require("../controllers/flashSale.controller");
 router.get("/flash-sale", flashSaleController.adminGetFlashSale);
