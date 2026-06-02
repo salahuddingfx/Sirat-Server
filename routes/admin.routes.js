@@ -36,6 +36,12 @@ router.post("/coupons", couponController.adminCreateCoupon);
 router.put("/coupons/:id", couponController.adminUpdateCoupon);
 router.delete("/coupons/:id", couponController.adminDeleteCoupon);
 
+// Flash Sale Management
+const flashSaleController = require("../controllers/flashSale.controller");
+router.get("/flash-sale", flashSaleController.adminGetFlashSale);
+router.put("/flash-sale", flashSaleController.adminUpsertFlashSale);
+router.patch("/flash-sale/toggle", flashSaleController.adminToggleFlashSale);
+
 // User Management
 router.get("/users", adminController.getAllUsers);
 router.patch("/users/:id/role", adminController.updateUserRole);
