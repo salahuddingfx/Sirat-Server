@@ -1,8 +1,11 @@
 const productService = require("../service/product.service");
+const cache = require("../config/cache.config");
 
 const getProducts = async (req, res) => {
   try {
-    const products = await productService.getAllProducts(req.query);
+    const queryKey = JSON.stringify(req.query || {});
+    const key = cache.buildKey("products", `list:${queryKey}`);
+    const products = await cache.getOrSet(key, () => productService.getAllProducts(req.query), 60);
     res.status(200).json({ success: true, data: products });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
@@ -11,7 +14,8 @@ const getProducts = async (req, res) => {
 
 const getProduct = async (req, res) => {
   try {
-    const product = await productService.getProductById(req.params.id);
+    const key = cache.buildKey("products", `id:${req.params.id}`);
+    const product = await cache.getOrSet(key, () => productService.getProductById(req.params.id), 60);
     if (!product) return res.status(404).json({ success: false, message: "Product not found" });
     res.status(200).json({ success: true, data: product });
   } catch (error) {
@@ -29,6 +33,7 @@ const createProduct = async (req, res) => {
       productData.variants = JSON.parse(productData.variants);
     }
     const product = await productService.createProduct(productData);
+    cache.invalidateNamespace("products");
     res.status(201).json({ success: true, data: product });
   } catch (error) {
     res.status(400).json({ success: false, message: error.message });
@@ -57,6 +62,7 @@ const updateProduct = async (req, res) => {
     }
 
     const product = await productService.updateProduct(req.params.id, productData);
+    cache.invalidateNamespace("products");
     res.status(200).json({ success: true, data: product });
   } catch (error) {
     res.status(400).json({ success: false, message: error.message });
@@ -66,6 +72,7 @@ const updateProduct = async (req, res) => {
 const deleteProduct = async (req, res) => {
   try {
     await productService.deleteProduct(req.params.id);
+    cache.invalidateNamespace("products");
     res.status(200).json({ success: true, message: "Product deleted" });
   } catch (error) {
     res.status(400).json({ success: false, message: error.message });
@@ -74,7 +81,11 @@ const deleteProduct = async (req, res) => {
 
 const getFeaturedProducts = async (req, res) => {
   try {
-    const products = await productService.getFeaturedProducts();
+    const products = await cache.getOrSet(
+      cache.buildKey("products", "featured"),
+      () => productService.getFeaturedProducts(),
+      60
+    );
     res.status(200).json({ success: true, data: products });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
@@ -83,7 +94,11 @@ const getFeaturedProducts = async (req, res) => {
 
 const getBestSeller = async (req, res) => {
   try {
-    const product = await productService.getBestSellerProduct();
+    const product = await cache.getOrSet(
+      cache.buildKey("products", "best-seller"),
+      () => productService.getBestSellerProduct(),
+      60
+    );
     res.status(200).json({ success: true, data: product });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
