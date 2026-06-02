@@ -1,5 +1,6 @@
 const orderService = require("../service/order.service");
 const { sendOrderEmails } = require("../service/mail.service");
+const cache = require("../config/cache.config");
 
 const placeOrder = async (req, res) => {
   try {
@@ -20,6 +21,8 @@ const placeOrder = async (req, res) => {
       }
     })();
 
+    cache.invalidateNamespace("orders");
+    cache.invalidateNamespace("dashboard");
     res.status(201).json({ success: true, data: order });
   } catch (error) {
     res.status(400).json({ success: false, message: error.message });
