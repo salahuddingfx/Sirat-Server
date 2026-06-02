@@ -11,6 +11,11 @@ const connectDB = require("./config/db.config");
 
 const app = express();
 
+// Disable ETag generation so responses are always 200 (not 304 Not Modified)
+app.disable("etag");
+// Remove Last-Modified header to prevent conditional 304 responses
+app.set("etag", false);
+
 // Global unhandled rejection handler (prevents crash on promise rejections)
 process.on("unhandledRejection", (reason) => {
   console.error("[Unhandled Rejection]", reason);
@@ -47,6 +52,38 @@ app.use((req, res, next) => {
       `[\x1b[35m${new Date().toLocaleTimeString()}\x1b[0m] \x1b[1m${req.method}\x1b[0m ${req.originalUrl} - ${statusColor}${res.statusCode}\x1b[0m (${duration}ms)`
     );
   });
+  next();
+});
+
+// Strip conditional request headers so Express never responds with 304
+// Also strip ETag and Last-Modified from outgoing responses
+app.use((req, res, next) => {
+  delete req.headers["if-none-match"];
+  delete req.headers["if-modified-since"];
+  delete req.headers["if-match"];
+  delete req.headers["if-unmodified-since"];
+  delete req.headers["if-range"];
+
+  const originalSetHeader = res.setHeader.bind(res);
+  res.setHeader = function (name, value) {
+    if (typeof name === "string") {
+      const lower = name.toLowerCase();
+      if (lower === "etag" || lower === "last-modified") {
+        return res;
+      }
+    }
+    return originalSetHeader(name, value);
+  };
+
+  next();
+});
+
+// Intercept all OPTIONS (CORS preflight) requests and return 200 instead of 204
+app.use((req, res, next) => {
+  if (req.method === "OPTIONS") {
+    res.status(200).end();
+    return;
+  }
   next();
 });
 
