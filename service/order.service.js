@@ -77,9 +77,12 @@ const updateOrderStatus = async (id, status) => {
     if (!order) throw new Error("Order not found");
 
     const oldStatus = order.status;
+    const cancels = ["cancelled", "returned"];
+    const goingToCancel = cancels.includes(status);
+    const wasCanceled = cancels.includes(oldStatus);
 
-    // Transitioning to cancelled: Restore stock
-    if (status === "cancelled" && oldStatus !== "cancelled") {
+    // Transitioning to cancelled/returned: Restore stock
+    if (goingToCancel && !wasCanceled) {
       for (const item of order.items) {
         await Product.findByIdAndUpdate(
           item.product,
@@ -88,8 +91,8 @@ const updateOrderStatus = async (id, status) => {
         );
       }
     }
-    // Transitioning from cancelled back to active: Deduct stock again
-    else if (oldStatus === "cancelled" && status !== "cancelled") {
+    // Transitioning from cancelled/returned back to active: Deduct stock again
+    else if (wasCanceled && !goingToCancel) {
       for (const item of order.items) {
         const product = await Product.findById(item.product).session(session);
         if (!product || product.stock < item.quantity) {
@@ -112,6 +115,38 @@ const updateOrderStatus = async (id, status) => {
 
     await session.commitTransaction();
     return order;
+  } catch (error) {
+    await session.abortTransaction();
+    throw error;
+  } finally {
+    session.endSession();
+  }
+};
+
+const deleteOrder = async (id) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
+  try {
+    const order = await Order.findById(id).session(session);
+    if (!order) throw new Error("Order not found");
+
+    // Restore stock for cancelled/returned orders only if not already restored
+    const cancels = ["cancelled", "returned"];
+    if (!cancels.includes(order.status)) {
+      for (const item of order.items) {
+        await Product.findByIdAndUpdate(
+          item.product,
+          { $inc: { stock: item.quantity } },
+          { session }
+        );
+      }
+    }
+
+    await Order.findByIdAndDelete(id, { session });
+
+    await session.commitTransaction();
+    return { message: "Order deleted" };
   } catch (error) {
     await session.abortTransaction();
     throw error;
@@ -144,4 +179,5 @@ module.exports = {
   updateOrderStatus,
   updatePaymentStatus,
   updateOrderDetails,
+  deleteOrder,
 };
