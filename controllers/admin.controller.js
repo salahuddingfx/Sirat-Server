@@ -104,6 +104,15 @@ const updateOrderDetails = async (req, res) => {
   }
 };
 
+const deleteOrder = async (req, res) => {
+  try {
+    const result = await orderService.deleteOrder(req.params.id);
+    res.status(200).json({ success: true, message: result.message });
+  } catch (error) {
+    res.status(400).json({ success: false, message: error.message });
+  }
+};
+
 const getOrderById = async (req, res) => {
   try {
     const order = await orderService.getOrderById(req.params.id);
@@ -121,6 +130,7 @@ module.exports = {
   updateOrderStatus,
   updatePaymentStatus,
   updateOrderDetails,
+  deleteOrder,
   getAllUsers,
   updateUserRole,
   deleteUser,
