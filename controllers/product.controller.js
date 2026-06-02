@@ -38,6 +38,9 @@ const createProduct = async (req, res) => {
 const updateProduct = async (req, res) => {
   try {
     const productData = { ...req.body };
+    if (typeof productData.variants === "string") {
+      productData.variants = JSON.parse(productData.variants);
+    }
     const existing = await productService.getProductById(req.params.id);
     if (!existing) return res.status(404).json({ success: false, message: "Product not found" });
 
