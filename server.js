@@ -55,52 +55,11 @@ app.use((req, res, next) => {
   next();
 });
 
-// Strip conditional request headers so Express never responds with 304 (dev only)
-// In production, keep ETag/If-None-Match so 304 Not Modified can be returned
-// to save bandwidth.
-if (env.nodeEnv === "development") {
-  app.use((req, res, next) => {
-    delete req.headers["if-none-match"];
-    delete req.headers["if-modified-since"];
-    delete req.headers["if-match"];
-    delete req.headers["if-unmodified-since"];
-    delete req.headers["if-range"];
-
-    const originalSetHeader = res.setHeader.bind(res);
-    res.setHeader = function (name, value) {
-      if (typeof name === "string") {
-        const lower = name.toLowerCase();
-        if (lower === "etag" || lower === "last-modified") {
-          return res;
-        }
-      }
-      return originalSetHeader(name, value);
-    };
-
-    next();
-  });
-}
-
 // Middleware
 app.use(cors({
   origin: process.env.CORS_ORIGIN ? process.env.CORS_ORIGIN.split(",") : ["http://localhost:3000", "http://localhost:5173", "http://localhost:5174"],
   credentials: true,
-  // In dev: force 200 for OPTIONS preflight instead of 204
-  // In production: leave default (204 for legacy compat, but modern browsers accept 200)
-  optionsSuccessStatus: env.nodeEnv === "development" ? 200 : 204,
 }));
-
-// Intercept all OPTIONS (CORS preflight) requests in dev only,
-// return 200 instead of letting it fall through with 204.
-if (env.nodeEnv === "development") {
-  app.use((req, res, next) => {
-    if (req.method === "OPTIONS") {
-      res.status(200).end();
-      return;
-    }
-    next();
-  });
-}
 
 app.use(express.json({ limit: "10kb" }));
 app.use(express.urlencoded({ extended: true, limit: "10kb" }));
@@ -152,7 +111,7 @@ app.listen(PORT, () => {
   \x1b[1;33m» ENV:\x1b[0m       \x1b[1m${env.nodeEnv}\x1b[0m
   \x1b[1;32m» PORT:\x1b[0m      \x1b[1;32m${PORT}\x1b[0m
   \x1b[1;34m» STATUS:\x1b[0m    \x1b[1;34mOnline & Listening\x1b[0m
-  \x1b[1;36m» CACHE:\x1b[0m     \x1b[1m${env.nodeEnv === "development" ? "ETag disabled (200s only)" : "ETag enabled (304 supported)"}\x1b[0m
+  \x1b[1;36m» CACHE:\x1b[0m     \x1b[1mIn-memory cache enabled (ETag active)\x1b[0m
   `;
   
   const lines = banner.split("\n");
