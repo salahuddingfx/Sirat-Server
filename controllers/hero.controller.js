@@ -20,7 +20,9 @@ const adminGetAllSlides = async (req, res) => {
 
 const adminCreateSlide = async (req, res) => {
   try {
-    const slide = await heroService.createSlide(req.body);
+    const data = { ...req.body };
+    if (req.file) data.image = req.file.path;
+    const slide = await heroService.createSlide(data);
     res.status(201).json({ success: true, data: slide });
   } catch (error) {
     res.status(400).json({ success: false, message: error.message });
@@ -29,7 +31,9 @@ const adminCreateSlide = async (req, res) => {
 
 const adminUpdateSlide = async (req, res) => {
   try {
-    const slide = await heroService.updateSlide(req.params.id, req.body);
+    const data = { ...req.body };
+    if (req.file) data.image = req.file.path;
+    const slide = await heroService.updateSlide(req.params.id, data);
     res.status(200).json({ success: true, data: slide });
   } catch (error) {
     res.status(400).json({ success: false, message: error.message });
