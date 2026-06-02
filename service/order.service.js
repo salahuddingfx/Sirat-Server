@@ -16,35 +16,38 @@ const getNextSequenceValue = async (sequenceName) => {
 
 const createOrder = async (orderData) => {
   try {
-    // 1. Validate stock for all items first
+    // 1. Validate variant stock for all items
     for (const item of orderData.items) {
       const product = await Product.findById(item.product);
-      if (!product) {
-        throw new Error(`Product not found.`);
-      }
-      if (product.stock < item.quantity) {
-        throw new Error(`Product "${product.name}" has insufficient stock. Available: ${product.stock}, Requested: ${item.quantity}`);
+      if (!product) throw new Error(`Product not found.`);
+      const variant = product.variants?.find(v => v.label === item.variant);
+      if (!variant) throw new Error(`Variant "${item.variant}" not found for product "${product.name}".`);
+      if ((variant.stock || 0) < item.quantity) {
+        throw new Error(`"${product.name}" (Size: ${item.variant}) has insufficient stock. Available: ${variant.stock || 0}, Requested: ${item.quantity}`);
       }
     }
 
-    // 2. Decrement stock atomically (atomic findOneAndUpdate with condition)
+    // 2. Decrement variant stock atomically
     const deducted = [];
     try {
       for (const item of orderData.items) {
         const updatedProduct = await Product.findOneAndUpdate(
-          { _id: item.product, stock: { $gte: item.quantity } },
-          { $inc: { stock: -item.quantity } },
+          { _id: item.product, variants: { $elemMatch: { label: item.variant, stock: { $gte: item.quantity } } } },
+          { $inc: { "variants.$.stock": -item.quantity } },
           { new: true }
         );
         if (!updatedProduct) {
-          throw new Error(`Product stock changed due to a concurrent order. Please try again.`);
+          throw new Error(`Variant "${item.variant}" stock changed due to a concurrent order. Please try again.`);
         }
-        deducted.push({ id: item.product, qty: item.quantity });
+        deducted.push({ id: item.product, variant: item.variant, qty: item.quantity });
       }
     } catch (stockError) {
       // Rollback any deducted stock
       for (const d of deducted) {
-        await Product.findByIdAndUpdate(d.id, { $inc: { stock: d.qty } });
+        await Product.findOneAndUpdate(
+          { _id: d.id, "variants.label": d.variant },
+          { $inc: { "variants.$.stock": d.qty } }
+        );
       }
       throw stockError;
     }
