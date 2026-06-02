@@ -33,6 +33,15 @@ router.delete("/coupons/:id", couponController.adminDeleteCoupon);
 // Payment Approval
 router.patch("/orders/:id/payment-status", adminController.updatePaymentStatus);
 
+// Order Status Update
+router.patch("/orders/:id/status", adminController.updateOrderStatus);
+
+// List All Orders
+router.get("/orders", adminController.getAllOrders);
+
+// Dashboard Stats
+router.get("/stats", adminController.getDashboardStats);
+
 // Order Detail Management
 router.get("/orders/:id", adminController.getOrderById);
 router.patch("/orders/:id/details", adminController.updateOrderDetails);
