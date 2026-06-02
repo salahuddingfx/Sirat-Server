@@ -26,6 +26,13 @@ const orderSchema = new mongoose.Schema(
       senderNumber: { type: String },
       txId: { type: String },
     },
+    paymentStatus: {
+      type: String,
+      enum: ["pending", "approved", "rejected"],
+      default: function () {
+        return this.paymentMethod === "cod" ? "approved" : "pending";
+      },
+    },
     status: {
       type: String,
       enum: ["received", "confirmed", "packed", "shipped", "delivered", "cancelled"],
