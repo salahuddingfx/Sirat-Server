@@ -94,11 +94,33 @@ const updatePaymentStatus = async (req, res) => {
   }
 };
 
+const updateOrderDetails = async (req, res) => {
+  try {
+    const updates = req.body;
+    const order = await orderService.updateOrderDetails(req.params.id, updates);
+    res.status(200).json({ success: true, data: order });
+  } catch (error) {
+    res.status(400).json({ success: false, message: error.message });
+  }
+};
+
+const getOrderById = async (req, res) => {
+  try {
+    const order = await orderService.getOrderById(req.params.id);
+    if (!order) return res.status(404).json({ success: false, message: "Order not found" });
+    res.status(200).json({ success: true, data: order });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 module.exports = {
   getDashboardStats,
   getAllOrders,
+  getOrderById,
   updateOrderStatus,
   updatePaymentStatus,
+  updateOrderDetails,
   getAllUsers,
   updateUserRole,
   deleteUser,
