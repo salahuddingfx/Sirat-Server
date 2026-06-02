@@ -2,27 +2,32 @@ const orderService = require("../service/order.service");
 const productService = require("../service/product.service");
 const User = require("../models/user.model");
 const { sendStatusUpdateEmail } = require("../service/mail.service");
+const cache = require("../config/cache.config");
 
 const getDashboardStats = async (req, res) => {
   try {
-    const totalOrders = await orderService.getOrders();
-    const totalProducts = await productService.getAllProducts();
-    const totalUsers = await User.countDocuments({ role: "user" });
-    
-    const revenue = totalOrders.reduce((acc, order) => acc + order.totalAmount, 0);
-    const lowStock = totalProducts.filter(p => p.stock < 10).length;
+    const stats = await cache.getOrSet(
+      cache.buildKey("dashboard", "stats"),
+      async () => {
+        const totalOrders = await orderService.getOrders();
+        const totalProducts = await productService.getAllProducts();
+        const totalUsers = await User.countDocuments({ role: "user" });
 
-    res.status(200).json({
-      success: true,
-      data: {
-        revenue,
-        orderCount: totalOrders.length,
-        userCount: totalUsers,
-        lowStockCount: lowStock,
-        recentOrders: totalOrders.slice(0, 5),
-        recentProducts: totalProducts.slice(0, 5)
-      }
-    });
+        const revenue = totalOrders.reduce((acc, order) => acc + order.totalAmount, 0);
+        const lowStock = totalProducts.filter(p => p.stock < 10).length;
+
+        return {
+          revenue,
+          orderCount: totalOrders.length,
+          userCount: totalUsers,
+          lowStockCount: lowStock,
+          recentOrders: totalOrders.slice(0, 5),
+          recentProducts: totalProducts.slice(0, 5)
+        };
+      },
+      30
+    );
+    res.status(200).json({ success: true, data: stats });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -30,7 +35,11 @@ const getDashboardStats = async (req, res) => {
 
 const getAllOrders = async (req, res) => {
     try {
-        const orders = await orderService.getOrders();
+        const orders = await cache.getOrSet(
+          cache.buildKey("orders", "all"),
+          () => orderService.getOrders(),
+          15
+        );
         res.status(200).json({ success: true, data: orders });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
