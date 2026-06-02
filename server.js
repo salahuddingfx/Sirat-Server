@@ -159,7 +159,8 @@ app.listen(PORT, () => {
   \x1b[1;36m» SERVICE:\x1b[0m   \x1b[1mSIRAT REST API\x1b[0m
   \x1b[1;33m» ENV:\x1b[0m       \x1b[1m${env.nodeEnv}\x1b[0m
   \x1b[1;32m» PORT:\x1b[0m      \x1b[1;32m${PORT}\x1b[0m
-  \x1b[1;34m» STATUS:\x1b[0m    \x1b[1mOnline & Listening\x1b[0m
+  \x1b[1;34m» STATUS:\x1b[0m    \x1b[1;34mOnline & Listening\x1b[0m
+  \x1b[1;36m» CACHE:\x1b[0m     \x1b[1m${env.nodeEnv === "development" ? "ETag disabled (200s only)" : "ETag enabled (304 supported)"}\x1b[0m
   `;
   
   const lines = banner.split("\n");
