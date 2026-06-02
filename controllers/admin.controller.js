@@ -99,6 +99,8 @@ const updatePaymentStatus = async (req, res) => {
   try {
     const { paymentStatus } = req.body;
     const order = await orderService.updatePaymentStatus(req.params.id, paymentStatus);
+    cache.invalidateNamespace("orders");
+    cache.invalidateNamespace("dashboard");
     res.status(200).json({ success: true, data: order });
   } catch (error) {
     res.status(400).json({ success: false, message: error.message });
@@ -109,6 +111,8 @@ const updateOrderDetails = async (req, res) => {
   try {
     const updates = req.body;
     const order = await orderService.updateOrderDetails(req.params.id, updates);
+    cache.invalidateNamespace("orders");
+    cache.invalidateNamespace("dashboard");
     res.status(200).json({ success: true, data: order });
   } catch (error) {
     res.status(400).json({ success: false, message: error.message });
@@ -118,6 +122,8 @@ const updateOrderDetails = async (req, res) => {
 const deleteOrder = async (req, res) => {
   try {
     const result = await orderService.deleteOrder(req.params.id);
+    cache.invalidateNamespace("orders");
+    cache.invalidateNamespace("dashboard");
     res.status(200).json({ success: true, message: result.message });
   } catch (error) {
     res.status(400).json({ success: false, message: error.message });
