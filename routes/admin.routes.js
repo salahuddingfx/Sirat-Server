@@ -5,6 +5,7 @@ const { storage } = require("../config/cloudinary.config");
 const { protect, admin } = require("../middleware/auth.middleware");
 const upload = multer({ storage });
 const heroController = require("../controllers/hero.controller");
+const adminController = require("../controllers/admin.controller");
 router.get("/hero", heroController.adminGetAllSlides);
 router.post("/hero", upload.single("image"), heroController.adminCreateSlide);
 router.put("/hero/:id", upload.single("image"), heroController.adminUpdateSlide);
