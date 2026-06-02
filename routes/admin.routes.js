@@ -1,20 +1,13 @@
 const express = require("express");
 const router = express.Router();
-const adminController = require("../controllers/admin.controller");
+const multer = require("multer");
+const { storage } = require("../config/cloudinary.config");
 const { protect, admin } = require("../middleware/auth.middleware");
-
-// All routes are protected and admin only
-router.use(protect, admin);
-
-router.get("/stats", adminController.getDashboardStats);
-router.get("/orders", adminController.getAllOrders);
-router.patch("/orders/:id/status", adminController.updateOrderStatus);
-
-// Hero Slider Management
+const upload = multer({ storage });
 const heroController = require("../controllers/hero.controller");
 router.get("/hero", heroController.adminGetAllSlides);
-router.post("/hero", heroController.adminCreateSlide);
-router.put("/hero/:id", heroController.adminUpdateSlide);
+router.post("/hero", upload.single("image"), heroController.adminCreateSlide);
+router.put("/hero/:id", upload.single("image"), heroController.adminUpdateSlide);
 router.delete("/hero/:id", heroController.adminDeleteSlide);
 
 // Review Moderation
