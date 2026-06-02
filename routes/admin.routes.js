@@ -43,6 +43,9 @@ router.patch("/orders/:id/payment-status", adminController.updatePaymentStatus);
 router.get("/orders/:id", adminController.getOrderById);
 router.patch("/orders/:id/details", adminController.updateOrderDetails);
 
+// Delete Order
+router.delete("/orders/:id", adminController.deleteOrder);
+
 // Flash Sale Management
 const flashSaleController = require("../controllers/flashSale.controller");
 router.get("/flash-sale", flashSaleController.adminGetFlashSale);
