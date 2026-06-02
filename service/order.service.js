@@ -126,10 +126,22 @@ const updatePaymentStatus = async (id, paymentStatus) => {
   return order;
 };
 
+const updateOrderDetails = async (id, updates) => {
+  const allowed = ["guestInfo", "shippingCharge", "totalAmount", "paymentMethod", "paymentDetails", "items"];
+  const sanitized = {};
+  for (const key of Object.keys(updates)) {
+    if (allowed.includes(key)) sanitized[key] = updates[key];
+  }
+  const order = await Order.findByIdAndUpdate(id, sanitized, { new: true, runValidators: true });
+  if (!order) throw new Error("Order not found");
+  return order;
+};
+
 module.exports = {
   createOrder,
   getOrders,
   getOrderById,
   updateOrderStatus,
   updatePaymentStatus,
+  updateOrderDetails,
 };
