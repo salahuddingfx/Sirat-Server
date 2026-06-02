@@ -60,4 +60,8 @@ router.get("/users", adminController.getAllUsers);
 router.patch("/users/:id/role", adminController.updateUserRole);
 router.delete("/users/:id", adminController.deleteUser);
 
+// Cache Management
+router.get("/cache/stats", adminController.getCacheStats);
+router.post("/cache/flush", adminController.flushCache);
+
 module.exports = router;
