@@ -10,6 +10,7 @@ const orderSchema = new mongoose.Schema(
       phone: { type: String },
       address: { type: String },
       city: { type: String },
+      zipCode: { type: String },
     },
     items: [
       {
