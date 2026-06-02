@@ -22,6 +22,8 @@ const adminCreateSlide = async (req, res) => {
   try {
     const data = { ...req.body };
     if (req.file) data.image = req.file.path;
+    data.isActive = data.isActive === "true" || data.isActive === true;
+    data.order = parseInt(data.order) || 0;
     const slide = await heroService.createSlide(data);
     res.status(201).json({ success: true, data: slide });
   } catch (error) {
@@ -33,6 +35,8 @@ const adminUpdateSlide = async (req, res) => {
   try {
     const data = { ...req.body };
     if (req.file) data.image = req.file.path;
+    data.isActive = data.isActive === "true" || data.isActive === true;
+    data.order = parseInt(data.order) || 0;
     const slide = await heroService.updateSlide(req.params.id, data);
     res.status(200).json({ success: true, data: slide });
   } catch (error) {
