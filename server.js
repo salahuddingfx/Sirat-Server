@@ -71,6 +71,7 @@ app.use("/api/coupons", require("./routes/coupon.routes"));
 app.use("/api/users", require("./routes/user.routes"));
 app.use("/api/newsletter", require("./routes/newsletter.routes"));
 app.use("/api/categories", require("./routes/category.routes"));
+app.use("/api/flash-sale", require("./routes/flashSale.routes"));
 
 // Global Error Handler
 app.use((err, req, res, next) => {
