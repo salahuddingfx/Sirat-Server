@@ -49,7 +49,7 @@ const getAllOrders = async (req, res) => {
 const updateOrderStatus = async (req, res) => {
     try {
         const order = await orderService.updateOrderStatus(req.params.id, req.body.status);
-        
+
         // Notify customer in background
         (async () => {
             try {
@@ -59,6 +59,8 @@ const updateOrderStatus = async (req, res) => {
             }
         })();
 
+        cache.invalidateNamespace("orders");
+        cache.invalidateNamespace("dashboard");
         res.status(200).json({ success: true, data: order });
     } catch (error) {
         res.status(400).json({ success: false, message: error.message });
