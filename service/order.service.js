@@ -120,9 +120,16 @@ const updateOrderStatus = async (id, status) => {
   }
 };
 
+const updatePaymentStatus = async (id, paymentStatus) => {
+  const order = await Order.findByIdAndUpdate(id, { paymentStatus }, { new: true });
+  if (!order) throw new Error("Order not found");
+  return order;
+};
+
 module.exports = {
   createOrder,
   getOrders,
   getOrderById,
   updateOrderStatus,
+  updatePaymentStatus,
 };
