@@ -152,7 +152,7 @@ const getOrCreateSessionId = (req, res) => {
         secure: process.env.NODE_ENV === "production",
       });
     } catch {
-      // ignore
+      // ignore — cookie parser not registered; client sends X-Session-Id header instead
     }
   }
 
