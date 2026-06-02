@@ -35,9 +35,21 @@ const createProduct = async (req, res) => {
 const updateProduct = async (req, res) => {
   try {
     const productData = { ...req.body };
-    if (req.files && req.files.length > 0) {
-      productData.images = req.files.map((file) => file.path);
+    const existing = await productService.getProductById(req.params.id);
+    if (!existing) return res.status(404).json({ success: false, message: "Product not found" });
+
+    let keepImages = [];
+    if (req.body.keepImages) {
+      keepImages = Array.isArray(req.body.keepImages) ? req.body.keepImages : JSON.parse(req.body.keepImages);
     }
+
+    if (req.files && req.files.length > 0) {
+      const newImages = req.files.map((file) => file.path);
+      productData.images = [...keepImages, ...newImages];
+    } else {
+      productData.images = keepImages;
+    }
+
     const product = await productService.updateProduct(req.params.id, productData);
     res.status(200).json({ success: true, data: product });
   } catch (error) {
