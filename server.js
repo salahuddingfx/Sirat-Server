@@ -31,6 +31,9 @@ app.use(xss()); // Prevent XSS attacks
 app.use(hpp()); // Prevent HTTP Parameter Pollution
 app.use(compression()); // Compress all responses
 
+// Public tracking endpoint (exempt from /api rate limit to avoid blocking analytics from many tabs/IPs)
+app.use("/api/track", require("./routes/track.routes"));
+
 // Rate limiting
 const limiter = rateLimit({
   windowMs: env.rateLimit.windowMs,
