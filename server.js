@@ -84,6 +84,7 @@ app.use("/api/auth", require("./routes/auth.routes"));
 app.use("/api/products", require("./routes/product.routes"));
 app.use("/api/orders", require("./routes/order.routes"));
 app.use("/api/admin", require("./routes/admin.routes"));
+app.use("/api/admin/analytics", require("./routes/analytics.routes"));
 app.use("/api/settings", require("./routes/settings.routes"));
 app.use("/api/hero", require("./routes/hero.routes"));
 app.use("/api/reviews", require("./routes/review.routes"));
