@@ -61,11 +61,11 @@ const createOrder = async (orderData) => {
 };
 
 const getOrders = async (query = {}) => {
-  return await Order.find(query).populate("items.product").sort({ createdAt: -1 });
+  return await Order.find(query).populate("items.product").populate("user", "name email phone").sort({ createdAt: -1 });
 };
 
 const getOrderById = async (id) => {
-  return await Order.findById(id).populate("items.product");
+  return await Order.findById(id).populate("items.product").populate("user", "name email phone");
 };
 
 const updateOrderStatus = async (id, status) => {
