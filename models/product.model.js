@@ -7,6 +7,9 @@ const productSchema = new mongoose.Schema(
     price: { type: Number, required: true },
     oldPrice: { type: Number },
     costPrice: { type: Number, default: 0 },
+    packagingCost: { type: Number, default: 0 },
+    managementCost: { type: Number, default: 0 },
+    otherCost: { type: Number, default: 0 },
     category: { type: String, required: true },
     images: [{ type: String }], // Array of Cloudinary URLs
     stock: { type: Number, default: 0 },
