@@ -1,4 +1,3 @@
-const mongoose = require("mongoose");
 const Order = require("../models/order.model");
 const Product = require("../models/product.model");
 const Counter = require("../models/counter.model");
@@ -6,23 +5,20 @@ const Counter = require("../models/counter.model");
 /**
  * Helper to generate atomic sequential IDs
  */
-const getNextSequenceValue = async (sequenceName, session = null) => {
+const getNextSequenceValue = async (sequenceName) => {
   const result = await Counter.findOneAndUpdate(
     { id: sequenceName },
     { $inc: { seq: 1 } },
-    { new: true, upsert: true, session }
+    { new: true, upsert: true }
   );
   return result.seq;
 };
 
 const createOrder = async (orderData) => {
-  const session = await mongoose.startSession();
-  session.startTransaction();
-
   try {
     // 1. Validate stock for all items first
     for (const item of orderData.items) {
-      const product = await Product.findById(item.product).session(session);
+      const product = await Product.findById(item.product);
       if (!product) {
         throw new Error(`Product not found.`);
       }
@@ -31,32 +27,36 @@ const createOrder = async (orderData) => {
       }
     }
 
-    // 2. Decrement stock atomically
-    for (const item of orderData.items) {
-      const updatedProduct = await Product.findOneAndUpdate(
-        { _id: item.product, stock: { $gte: item.quantity } },
-        { $inc: { stock: -item.quantity } },
-        { new: true, session }
-      );
-      if (!updatedProduct) {
-        throw new Error(`Product stock changed due to a concurrent order. Please try again.`);
+    // 2. Decrement stock atomically (atomic findOneAndUpdate with condition)
+    const deducted = [];
+    try {
+      for (const item of orderData.items) {
+        const updatedProduct = await Product.findOneAndUpdate(
+          { _id: item.product, stock: { $gte: item.quantity } },
+          { $inc: { stock: -item.quantity } },
+          { new: true }
+        );
+        if (!updatedProduct) {
+          throw new Error(`Product stock changed due to a concurrent order. Please try again.`);
+        }
+        deducted.push({ id: item.product, qty: item.quantity });
       }
+    } catch (stockError) {
+      // Rollback any deducted stock
+      for (const d of deducted) {
+        await Product.findByIdAndUpdate(d.id, { $inc: { stock: d.qty } });
+      }
+      throw stockError;
     }
 
     // 3. Generate unique sequential order ID
-    const seq = await getNextSequenceValue("orderId", session);
+    const seq = await getNextSequenceValue("orderId");
     const orderId = `SRT-${1000 + seq}`;
 
-    const order = await Order.create([{ ...orderData, orderId }], { session });
-    const finalOrder = order[0];
-
-    await session.commitTransaction();
-    return finalOrder;
+    const order = await Order.create({ ...orderData, orderId });
+    return order;
   } catch (error) {
-    await session.abortTransaction();
     throw error;
-  } finally {
-    session.endSession();
   }
 };
 
@@ -69,11 +69,8 @@ const getOrderById = async (id) => {
 };
 
 const updateOrderStatus = async (id, status) => {
-  const session = await mongoose.startSession();
-  session.startTransaction();
-
   try {
-    const order = await Order.findById(id).session(session);
+    const order = await Order.findById(id);
     if (!order) throw new Error("Order not found");
 
     const oldStatus = order.status;
@@ -84,17 +81,13 @@ const updateOrderStatus = async (id, status) => {
     // Transitioning to cancelled/returned: Restore stock
     if (goingToCancel && !wasCanceled) {
       for (const item of order.items) {
-        await Product.findByIdAndUpdate(
-          item.product,
-          { $inc: { stock: item.quantity } },
-          { session }
-        );
+        await Product.findByIdAndUpdate(item.product, { $inc: { stock: item.quantity } });
       }
     }
     // Transitioning from cancelled/returned back to active: Deduct stock again
     else if (wasCanceled && !goingToCancel) {
       for (const item of order.items) {
-        const product = await Product.findById(item.product).session(session);
+        const product = await Product.findById(item.product);
         if (!product || product.stock < item.quantity) {
           throw new Error(`Cannot restore order. Product "${product?.name || 'Unknown'}" is out of stock.`);
         }
@@ -102,7 +95,7 @@ const updateOrderStatus = async (id, status) => {
         const updatedProduct = await Product.findOneAndUpdate(
           { _id: item.product, stock: { $gte: item.quantity } },
           { $inc: { stock: -item.quantity } },
-          { new: true, session }
+          { new: true }
         );
         if (!updatedProduct) {
           throw new Error(`Product stock changed due to a concurrent order. Please try again.`);
@@ -111,47 +104,32 @@ const updateOrderStatus = async (id, status) => {
     }
 
     order.status = status;
-    await order.save({ session });
+    await order.save();
 
-    await session.commitTransaction();
     return order;
   } catch (error) {
-    await session.abortTransaction();
     throw error;
-  } finally {
-    session.endSession();
   }
 };
 
 const deleteOrder = async (id) => {
-  const session = await mongoose.startSession();
-  session.startTransaction();
-
   try {
-    const order = await Order.findById(id).session(session);
+    const order = await Order.findById(id);
     if (!order) throw new Error("Order not found");
 
-    // Restore stock for cancelled/returned orders only if not already restored
+    // Restore stock for non-cancelled/non-returned orders
     const cancels = ["cancelled", "returned"];
     if (!cancels.includes(order.status)) {
       for (const item of order.items) {
-        await Product.findByIdAndUpdate(
-          item.product,
-          { $inc: { stock: item.quantity } },
-          { session }
-        );
+        await Product.findByIdAndUpdate(item.product, { $inc: { stock: item.quantity } });
       }
     }
 
-    await Order.findByIdAndDelete(id, { session });
+    await Order.findByIdAndDelete(id);
 
-    await session.commitTransaction();
     return { message: "Order deleted" };
   } catch (error) {
-    await session.abortTransaction();
     throw error;
-  } finally {
-    session.endSession();
   }
 };
 
