@@ -11,18 +11,10 @@ const connectDB = require("./config/db.config");
 
 const app = express();
 
-// ETag handling:
-// - Development: disable ETag and Last-Modified so responses are always 200
-//   (cleaner logs; cache.config.js handles freshness in-memory)
-// - Production: keep ETag/Last-Modified enabled for proper 304 Not Modified
-//   responses (saves bandwidth for clients that send If-None-Match)
-if (env.nodeEnv === "development") {
-  app.disable("etag");
-  app.set("etag", false);
-} else {
-  app.enable("etag");
-  app.set("etag", "strong");
-}
+// ETag stays enabled in all environments so clients get proper 304 Not Modified
+// responses when content hasn't changed. This saves bandwidth in both dev and prod.
+app.enable("etag");
+app.set("etag", "strong");
 
 // Global unhandled rejection handler (prevents crash on promise rejections)
 process.on("unhandledRejection", (reason) => {
