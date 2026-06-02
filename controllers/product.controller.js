@@ -25,6 +25,9 @@ const createProduct = async (req, res) => {
     if (req.files) {
       productData.images = req.files.map((file) => file.path);
     }
+    if (typeof productData.variants === "string") {
+      productData.variants = JSON.parse(productData.variants);
+    }
     const product = await productService.createProduct(productData);
     res.status(201).json({ success: true, data: product });
   } catch (error) {
