@@ -84,10 +84,21 @@ const deleteUser = async (req, res) => {
   }
 };
 
+const updatePaymentStatus = async (req, res) => {
+  try {
+    const { paymentStatus } = req.body;
+    const order = await orderService.updatePaymentStatus(req.params.id, paymentStatus);
+    res.status(200).json({ success: true, data: order });
+  } catch (error) {
+    res.status(400).json({ success: false, message: error.message });
+  }
+};
+
 module.exports = {
   getDashboardStats,
   getAllOrders,
   updateOrderStatus,
+  updatePaymentStatus,
   getAllUsers,
   updateUserRole,
   deleteUser,
