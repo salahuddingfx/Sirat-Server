@@ -100,6 +100,9 @@ const getBestSeller = async (req, res) => {
       () => productService.getBestSellerProduct(),
       60
     );
+    if (!product) {
+      return res.status(404).json({ success: false, message: "No best seller product found" });
+    }
     res.status(200).json({ success: true, data: product });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
