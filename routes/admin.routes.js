@@ -1,7 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const multer = require("multer");
-const { storage } = require("../config/cloudinary.config");
+const { storage } = require("../config/multer.config");
 const { protect, admin } = require("../middleware/auth.middleware");
 const upload = multer({ storage });
 const heroController = require("../controllers/hero.controller");
