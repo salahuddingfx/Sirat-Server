@@ -1,7 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const multer = require("multer");
-const { storage } = require("../config/cloudinary.config");
+const { storage } = require("../config/multer.config");
 const userController = require("../controllers/user.controller");
 const { protect } = require("../middleware/auth.middleware");
 
