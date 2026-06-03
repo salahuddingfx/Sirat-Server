@@ -1,21 +1,23 @@
-const { prisma, connectDB } = require("../config/db.config");
+const { db, connectDB, pool } = require("../config/db.config");
+const { product, user, category } = require("../db/schema");
+const { count } = require("drizzle-orm");
 
 async function check() {
   try {
     console.log("Checking database connection...");
     await connectDB();
-    console.log("Successfully connected to MySQL via Prisma!");
+    console.log("Successfully connected to MySQL via Drizzle!");
 
-    const productCount = await prisma.product.count();
-    const userCount = await prisma.user.count();
-    const categoryCount = await prisma.category.count();
+    const [pResult] = await db.select({ value: count() }).from(product);
+    const [uResult] = await db.select({ value: count() }).from(user);
+    const [cResult] = await db.select({ value: count() }).from(category);
 
     console.log("\x1b[32mStats:\x1b[0m");
-    console.log(`- Products: ${productCount}`);
-    console.log(`- Users: ${userCount}`);
-    console.log(`- Categories: ${categoryCount}`);
+    console.log(`- Products: ${pResult.value}`);
+    console.log(`- Users: ${uResult.value}`);
+    console.log(`- Categories: ${cResult.value}`);
 
-    await prisma.$disconnect();
+    await pool.end();
     process.exit(0);
   } catch (err) {
     console.error("\x1b[31mDatabase check failed:\x1b[0m", err.message);

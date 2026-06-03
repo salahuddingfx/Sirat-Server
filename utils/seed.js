@@ -1,4 +1,6 @@
-const { prisma, connectDB } = require("../config/db.config");
+const { db, connectDB, pool } = require("../config/db.config");
+const schema = require("../db/schema");
+const crypto = require("crypto");
 
 const categories = [
   {
@@ -172,18 +174,24 @@ const seedDB = async () => {
     console.log("Database connected. Clearing existing products and categories...");
 
     // Delete in order to avoid foreign key violations
-    await prisma.orderItem.deleteMany({});
-    await prisma.review.deleteMany({});
-    await prisma.productVariant.deleteMany({});
-    await prisma.productImage.deleteMany({});
-    await prisma.product.deleteMany({});
-    await prisma.category.deleteMany({});
+    await db.delete(schema.orderitem);
+    await db.delete(schema.review);
+    await db.delete(schema.productvariant);
+    await db.delete(schema.productimage);
+    await db.delete(schema.product);
+    await db.delete(schema.category);
 
     console.log("Seeding new categories...");
     const categoryMap = {};
     for (const cat of categories) {
-      const created = await prisma.category.create({ data: cat });
-      categoryMap[cat.name] = created.id;
+      const categoryId = crypto.randomUUID();
+      await db.insert(schema.category).values({
+        id: categoryId,
+        name: cat.name,
+        image: cat.image,
+        featured: cat.featured,
+      });
+      categoryMap[cat.name] = categoryId;
     }
 
     console.log("Seeding new products...");
@@ -194,23 +202,35 @@ const seedDB = async () => {
         .replace(/[^\w ]+/g, "")
         .replace(/ +/g, "-");
 
-      await prisma.product.create({
-        data: {
-          ...rest,
-          slug,
-          categoryId: categoryMap[categoryName],
-          images: {
-            create: images.map((url) => ({ url })),
-          },
-          variants: {
-            create: variants,
-          },
-        },
+      const productId = crypto.randomUUID();
+      await db.insert(schema.product).values({
+        ...rest,
+        id: productId,
+        slug,
+        categoryId: categoryMap[categoryName],
       });
+
+      for (const imgUrl of images) {
+        await db.insert(schema.productimage).values({
+          id: crypto.randomUUID(),
+          url: imgUrl,
+          productId,
+        });
+      }
+
+      for (const variant of variants) {
+        await db.insert(schema.productvariant).values({
+          id: crypto.randomUUID(),
+          label: variant.label,
+          priceDelta: variant.priceDelta,
+          stock: variant.stock,
+          productId,
+        });
+      }
     }
 
     console.log("Database seeded successfully with premium items and categories!");
-    await prisma.$disconnect();
+    await pool.end();
     process.exit(0);
   } catch (error) {
     console.error("Error seeding database:", error);

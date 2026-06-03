@@ -1,19 +1,21 @@
-const { prisma } = require("../config/db.config");
+const { db } = require("../config/db.config");
+const { user } = require("../db/schema");
+const { eq, or } = require("drizzle-orm");
 const jwt = require("jsonwebtoken");
 const env = require("../config/env.config");
 const bcrypt = require("bcryptjs");
+const crypto = require("crypto");
 
 const registerUser = async (userData) => {
   const { email, username, phone, password, ...rest } = userData;
   
-  const userExists = await prisma.user.findFirst({
-    where: {
-      OR: [
-        { email },
-        username ? { username } : undefined,
-        phone ? { phone } : undefined,
-      ].filter(Boolean),
-    },
+  const conditions = [];
+  conditions.push(eq(user.email, email));
+  if (username) conditions.push(eq(user.username, username));
+  if (phone) conditions.push(eq(user.phone, phone));
+
+  const userExists = await db.query.user.findFirst({
+    where: or(...conditions),
   });
 
   if (userExists) {
@@ -21,47 +23,49 @@ const registerUser = async (userData) => {
   }
 
   const hashedPassword = await bcrypt.hash(password, 10);
+  const userId = crypto.randomUUID();
 
-  const user = await prisma.user.create({
-    data: {
-      ...rest,
-      email,
-      username,
-      phone,
-      password: hashedPassword,
-    },
+  await db.insert(user).values({
+    id: userId,
+    ...rest,
+    email,
+    username,
+    phone,
+    password: hashedPassword,
   });
 
-  const token = jwt.sign({ id: user.id, role: user.role }, env.jwtSecret, {
+  const createdUser = await db.query.user.findFirst({
+    where: eq(user.id, userId),
+  });
+
+  const token = jwt.sign({ id: createdUser.id, role: createdUser.role }, env.jwtSecret, {
     expiresIn: env.jwtExpiresIn,
   });
 
-  const userToReturn = { ...user };
+  const userToReturn = { ...createdUser };
   delete userToReturn.password;
   
   return { user: userToReturn, token };
 };
 
 const loginUser = async (identifier, password) => {
-  const user = await prisma.user.findFirst({
-    where: {
-      OR: [
-        { email: identifier },
-        { username: identifier },
-        { phone: identifier }
-      ]
-    }
+  const foundUser = await db.query.user.findFirst({
+    where: or(
+      eq(user.email, identifier),
+      eq(user.username, identifier),
+      eq(user.phone, identifier)
+    ),
   });
 
-  if (!user || !(await bcrypt.compare(password, user.password))) {
+  if (!foundUser || !(await bcrypt.compare(password, foundUser.password))) {
     throw new Error("Invalid credentials");
   }
 
-  const token = jwt.sign({ id: user.id, role: user.role }, env.jwtSecret, {
+  const token = jwt.sign({ id: foundUser.id, role: foundUser.role }, env.jwtSecret, {
     expiresIn: env.jwtExpiresIn,
   });
 
-  const userToReturn = { ...user };
+  const userToReturn = { ...foundUser };
   delete userToReturn.password;
 
   return { user: userToReturn, token };
