@@ -1,15 +1,61 @@
 const { db } = require("../config/db.config");
 const { product, category, productimage, productvariant, orderitem, order } = require("../db/schema");
-const { eq, and, desc, sum, not } = require("drizzle-orm");
+const { eq, and, desc, sum, not, inArray } = require("drizzle-orm");
 const crypto = require("crypto");
+
+/**
+ * Helper to populate category, images, and variants for a list of products
+ */
+const populateProducts = async (products, executor = db) => {
+  if (products.length === 0) return [];
+  const productIds = products.map((p) => p.id);
+
+  // Fetch all images for these products
+  const images = await executor.select()
+    .from(productimage)
+    .where(inArray(productimage.productId, productIds));
+
+  // Fetch all variants for these products
+  const variants = await executor.select()
+    .from(productvariant)
+    .where(inArray(productvariant.productId, productIds));
+
+  // Fetch categories
+  const categoryIds = [...new Set(products.map((p) => p.categoryId).filter(Boolean))];
+  const categories = categoryIds.length > 0
+    ? await executor.select().from(category).where(inArray(category.id, categoryIds))
+    : [];
+
+  const categoryMap = new Map(categories.map((c) => [c.id, c]));
+  const imagesMap = new Map();
+  const variantsMap = new Map();
+
+  images.forEach((img) => {
+    if (!imagesMap.has(img.productId)) imagesMap.set(img.productId, []);
+    imagesMap.get(img.productId).push(img);
+  });
+
+  variants.forEach((v) => {
+    if (!variantsMap.has(v.productId)) variantsMap.set(v.productId, []);
+    variantsMap.get(v.productId).push(v);
+  });
+
+  return products.map((p) => ({
+    ...p,
+    category: categoryMap.get(p.categoryId) || null,
+    images: imagesMap.get(p.id) || [],
+    variants: variantsMap.get(p.id) || [],
+  }));
+};
 
 const getAllProducts = async (query = {}) => {
   let conditions = [];
   
   if (query.category) {
-    const cat = await db.query.category.findFirst({
-      where: eq(category.name, query.category),
-    });
+    const [cat] = await db.select()
+      .from(category)
+      .where(eq(category.name, query.category))
+      .limit(1);
     if (cat) {
       conditions.push(eq(product.categoryId, cat.id));
     } else {
@@ -25,39 +71,31 @@ const getAllProducts = async (query = {}) => {
     conditions.push(eq(product.status, query.status));
   }
 
-  return await db.query.product.findMany({
-    where: conditions.length > 0 ? and(...conditions) : undefined,
-    with: {
-      images: true,
-      variants: true,
-      category: true,
-    },
-    orderBy: [desc(product.createdAt)],
-  });
+  const products = await db.select()
+    .from(product)
+    .where(conditions.length > 0 ? and(...conditions) : undefined)
+    .orderBy(desc(product.createdAt));
+
+  return await populateProducts(products);
 };
 
 const getProductById = async (idOrSlug) => {
-  let foundProduct = await db.query.product.findFirst({
-    where: eq(product.id, idOrSlug),
-    with: {
-      images: true,
-      variants: true,
-      category: true,
-    },
-  });
+  let [foundProduct] = await db.select()
+    .from(product)
+    .where(eq(product.id, idOrSlug))
+    .limit(1);
 
   if (!foundProduct) {
-    foundProduct = await db.query.product.findFirst({
-      where: eq(product.slug, idOrSlug),
-      with: {
-        images: true,
-        variants: true,
-        category: true,
-      },
-    });
+    [foundProduct] = await db.select()
+      .from(product)
+      .where(eq(product.slug, idOrSlug))
+      .limit(1);
   }
 
-  return foundProduct;
+  if (!foundProduct) return null;
+
+  const [populated] = await populateProducts([foundProduct]);
+  return populated;
 };
 
 const createProduct = async (productData) => {
@@ -66,7 +104,7 @@ const createProduct = async (productData) => {
   return await db.transaction(async (tx) => {
     let categoryId = providedCategoryId;
     if (!categoryId && categoryName) {
-      const cat = await tx.query.category.findFirst({ where: eq(category.name, categoryName) });
+      const [cat] = await tx.select().from(category).where(eq(category.name, categoryName)).limit(1);
       if (cat) {
         categoryId = cat.id;
       } else {
@@ -123,14 +161,11 @@ const createProduct = async (productData) => {
       await tx.insert(productvariant).values(v);
     }
 
-    return await tx.query.product.findFirst({
-      where: eq(product.id, productId),
-      with: {
-        images: true,
-        variants: true,
-        category: true,
-      },
-    });
+    const [created] = await tx.select().from(product).where(eq(product.id, productId)).limit(1);
+    if (!created) return null;
+
+    const [populated] = await populateProducts([created], tx);
+    return populated;
   });
 };
 
@@ -140,7 +175,7 @@ const updateProduct = async (id, productData) => {
   return await db.transaction(async (tx) => {
     let categoryId = providedCategoryId;
     if (!categoryId && categoryName) {
-      const cat = await tx.query.category.findFirst({ where: eq(category.name, categoryName) });
+      const [cat] = await tx.select().from(category).where(eq(category.name, categoryName)).limit(1);
       if (cat) categoryId = cat.id;
     }
 
@@ -175,21 +210,16 @@ const updateProduct = async (id, productData) => {
       }
     }
 
-    return await tx.query.product.findFirst({
-      where: eq(product.id, id),
-      with: {
-        images: true,
-        variants: true,
-        category: true,
-      },
-    });
+    const [updated] = await tx.select().from(product).where(eq(product.id, id)).limit(1);
+    if (!updated) return null;
+
+    const [populated] = await populateProducts([updated], tx);
+    return populated;
   });
 };
 
 const deleteProduct = async (id) => {
-  const deleted = await db.query.product.findFirst({
-    where: eq(product.id, id),
-  });
+  const [deleted] = await db.select().from(product).where(eq(product.id, id)).limit(1);
   if (deleted) {
     await db.delete(product).where(eq(product.id, id));
   }
@@ -197,24 +227,20 @@ const deleteProduct = async (id) => {
 };
 
 const getFeaturedProducts = async () => {
-  return await db.query.product.findMany({
-    where: and(
+  const products = await db.select()
+    .from(product)
+    .where(and(
       eq(product.featured, true),
       eq(product.status, "Live")
-    ),
-    with: {
-      images: true,
-      variants: true,
-      category: true,
-    },
-    orderBy: [desc(product.createdAt)],
-  });
+    ))
+    .orderBy(desc(product.createdAt));
+
+  return await populateProducts(products);
 };
 
 const getBestSellerProduct = async () => {
   const bestSellers = await db.select({
     productId: orderitem.productId,
-    totalQty: sum(orderitem.quantity),
   })
   .from(orderitem)
   .innerJoin(order, eq(orderitem.orderId, order.id))
@@ -224,26 +250,29 @@ const getBestSellerProduct = async () => {
   .limit(1);
 
   if (bestSellers.length > 0 && bestSellers[0].productId) {
-    const foundProduct = await db.query.product.findFirst({
-      where: eq(product.id, bestSellers[0].productId),
-      with: {
-        images: true,
-        variants: true,
-        category: true,
-      },
-    });
-    if (foundProduct) return foundProduct;
+    const [foundProduct] = await db.select()
+      .from(product)
+      .where(eq(product.id, bestSellers[0].productId))
+      .limit(1);
+
+    if (foundProduct) {
+      const [populated] = await populateProducts([foundProduct]);
+      return populated;
+    }
   }
 
-  return await db.query.product.findFirst({
-    where: eq(product.status, "Live"),
-    with: {
-      images: true,
-      variants: true,
-      category: true,
-    },
-    orderBy: [desc(product.rating), desc(product.createdAt)],
-  });
+  const [fallbackProduct] = await db.select()
+    .from(product)
+    .where(eq(product.status, "Live"))
+    .orderBy(desc(product.rating), desc(product.createdAt))
+    .limit(1);
+
+  if (fallbackProduct) {
+    const [populated] = await populateProducts([fallbackProduct]);
+    return populated;
+  }
+
+  return null;
 };
 
 module.exports = {
@@ -254,4 +283,5 @@ module.exports = {
   deleteProduct,
   getFeaturedProducts,
   getBestSellerProduct,
+  populateProducts,
 };

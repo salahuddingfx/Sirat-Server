@@ -1,6 +1,6 @@
 const { db } = require("../config/db.config");
-const { order, orderitem, productvariant, counter } = require("../db/schema");
-const { eq, and, desc, sql } = require("drizzle-orm");
+const { order, orderitem, productvariant, counter, user, product } = require("../db/schema");
+const { eq, and, desc, sql, inArray } = require("drizzle-orm");
 const crypto = require("crypto");
 
 /**
@@ -13,10 +13,58 @@ const getNextSequenceValue = async (tx, sequenceName) => {
       set: { count: sql`count + 1` }
     });
 
-  const result = await tx.query.counter.findFirst({
-    where: eq(counter.name, sequenceName),
-  });
+  const [result] = await tx.select()
+    .from(counter)
+    .where(eq(counter.name, sequenceName))
+    .limit(1);
+
   return result.count;
+};
+
+/**
+ * Helper to populate orderitems, their products, and users for a list of orders
+ */
+const populateOrders = async (orders, executor = db) => {
+  if (orders.length === 0) return [];
+  const orderIds = orders.map((o) => o.id);
+
+  // Fetch all orderitems for these orders
+  const items = await executor.select()
+    .from(orderitem)
+    .where(inArray(orderitem.orderId, orderIds));
+
+  // Fetch products for all these items
+  const productIds = [...new Set(items.map((item) => item.productId).filter(Boolean))];
+  const products = productIds.length > 0
+    ? await executor.select().from(product).where(inArray(product.id, productIds))
+    : [];
+  const productMap = new Map(products.map((p) => [p.id, p]));
+
+  // Attach product to each item
+  const populatedItems = items.map((item) => ({
+    ...item,
+    product: productMap.get(item.productId) || null,
+  }));
+
+  // Fetch users for these orders
+  const userIds = [...new Set(orders.map((o) => o.userId).filter(Boolean))];
+  const users = userIds.length > 0
+    ? await executor.select({ id: user.id, name: user.name, email: user.email, phone: user.phone }).from(user).where(inArray(user.id, userIds))
+    : [];
+  const userMap = new Map(users.map((u) => [u.id, u]));
+
+  // Group items by orderId
+  const itemsMap = new Map();
+  populatedItems.forEach((item) => {
+    if (!itemsMap.has(item.orderId)) itemsMap.set(item.orderId, []);
+    itemsMap.get(item.orderId).push(item);
+  });
+
+  return orders.map((o) => ({
+    ...o,
+    orderitem: itemsMap.get(o.id) || [],
+    user: o.userId ? userMap.get(o.userId) || null : null,
+  }));
 };
 
 const createOrder = async (orderData) => {
@@ -24,13 +72,26 @@ const createOrder = async (orderData) => {
     return await db.transaction(async (tx) => {
       // 1. Validate & Decrement stock for all items
       for (const item of orderData.items) {
-        const variant = await tx.query.productvariant.findFirst({
-          where: and(
-            eq(productvariant.productId, item.product),
-            eq(productvariant.label, item.variant)
-          ),
-          with: { product: true },
-        });
+        // Query variant and join with product to get details
+        const rows = await tx.select({
+          id: productvariant.id,
+          label: productvariant.label,
+          priceDelta: productvariant.priceDelta,
+          stock: productvariant.stock,
+          productId: productvariant.productId,
+          product: {
+            name: product.name,
+          },
+        })
+        .from(productvariant)
+        .innerJoin(product, eq(productvariant.productId, product.id))
+        .where(and(
+          eq(productvariant.productId, item.product),
+          eq(productvariant.label, item.variant)
+        ))
+        .limit(1);
+
+        const variant = rows[0] || null;
 
         if (!variant) throw new Error(`Variant "${item.variant}" not found.`);
         if (variant.stock < item.quantity) {
@@ -81,17 +142,11 @@ const createOrder = async (orderData) => {
       }
 
       // 5. Fetch and return created order with relation mappings
-      return await tx.query.order.findFirst({
-        where: eq(order.id, orderUuid),
-        with: {
-          orderitem: {
-            with: { product: true },
-          },
-          user: {
-            columns: { name: true, email: true, phone: true },
-          },
-        },
-      });
+      const [newOrder] = await tx.select().from(order).where(eq(order.id, orderUuid)).limit(1);
+      if (!newOrder) return null;
+
+      const [populated] = await populateOrders([newOrder], tx);
+      return populated;
     });
   } catch (error) {
     throw error;
@@ -103,42 +158,30 @@ const getOrders = async (query = {}) => {
   if (query.user) conditions.push(eq(order.userId, query.user));
   if (query.status) conditions.push(eq(order.status, query.status));
 
-  return await db.query.order.findMany({
-    where: conditions.length > 0 ? and(...conditions) : undefined,
-    with: {
-      orderitem: {
-        with: { product: true },
-      },
-      user: {
-        columns: { id: true, name: true, email: true, phone: true },
-      },
-    },
-    orderBy: [desc(order.createdAt)],
-  });
+  const orders = await db.select()
+    .from(order)
+    .where(conditions.length > 0 ? and(...conditions) : undefined)
+    .orderBy(desc(order.createdAt));
+
+  return await populateOrders(orders);
 };
 
 const getOrderById = async (id) => {
-  return await db.query.order.findFirst({
-    where: eq(order.id, id),
-    with: {
-      orderitem: {
-        with: { product: true },
-      },
-      user: {
-        columns: { id: true, name: true, email: true, phone: true },
-      },
-    },
-  });
+  const [foundOrder] = await db.select().from(order).where(eq(order.id, id)).limit(1);
+  if (!foundOrder) return null;
+
+  const [populated] = await populateOrders([foundOrder]);
+  return populated;
 };
 
 const updateOrderStatus = async (id, status) => {
   try {
     return await db.transaction(async (tx) => {
-      const foundOrder = await tx.query.order.findFirst({
-        where: eq(order.id, id),
-        with: { orderitem: true },
-      });
+      const [foundOrder] = await tx.select().from(order).where(eq(order.id, id)).limit(1);
       if (!foundOrder) throw new Error("Order not found");
+
+      const orderItems = await tx.select().from(orderitem).where(eq(orderitem.orderId, id));
+      foundOrder.orderitem = orderItems;
 
       const oldStatus = foundOrder.status;
       const cancels = ["cancelled", "returned"];
@@ -159,12 +202,14 @@ const updateOrderStatus = async (id, status) => {
       // Transitioning from cancelled/returned back to active: Deduct stock again
       else if (wasCanceled && !goingToCancel) {
         for (const item of foundOrder.orderitem) {
-          const variant = await tx.query.productvariant.findFirst({
-            where: and(
+          const [variant] = await tx.select()
+            .from(productvariant)
+            .where(and(
               eq(productvariant.productId, item.productId),
               eq(productvariant.label, item.variant)
-            ),
-          });
+            ))
+            .limit(1);
+
           if (!variant || variant.stock < item.quantity) {
             throw new Error(`Cannot restore order. Some items are out of stock.`);
           }
@@ -178,9 +223,8 @@ const updateOrderStatus = async (id, status) => {
         .set({ status })
         .where(eq(order.id, id));
 
-      return await tx.query.order.findFirst({
-        where: eq(order.id, id),
-      });
+      const [updated] = await tx.select().from(order).where(eq(order.id, id)).limit(1);
+      return updated;
     });
   } catch (error) {
     throw error;
@@ -190,11 +234,11 @@ const updateOrderStatus = async (id, status) => {
 const deleteOrder = async (id) => {
   try {
     return await db.transaction(async (tx) => {
-      const foundOrder = await tx.query.order.findFirst({
-        where: eq(order.id, id),
-        with: { orderitem: true },
-      });
+      const [foundOrder] = await tx.select().from(order).where(eq(order.id, id)).limit(1);
       if (!foundOrder) throw new Error("Order not found");
+
+      const orderItems = await tx.select().from(orderitem).where(eq(orderitem.orderId, id));
+      foundOrder.orderitem = orderItems;
 
       // Restore stock for non-cancelled/non-returned orders
       const cancels = ["cancelled", "returned"];
@@ -221,9 +265,7 @@ const updatePaymentStatus = async (id, paymentStatus) => {
   await db.update(order)
     .set({ paymentStatus })
     .where(eq(order.id, id));
-  const updated = await db.query.order.findFirst({
-    where: eq(order.id, id),
-  });
+  const [updated] = await db.select().from(order).where(eq(order.id, id)).limit(1);
   if (!updated) throw new Error("Order not found");
   return updated;
 };
@@ -250,9 +292,7 @@ const updateOrderDetails = async (id, updates) => {
     .set(data)
     .where(eq(order.id, id));
 
-  const updated = await db.query.order.findFirst({
-    where: eq(order.id, id),
-  });
+  const [updated] = await db.select().from(order).where(eq(order.id, id)).limit(1);
   if (!updated) throw new Error("Order not found");
   return updated;
 };

@@ -4,11 +4,13 @@ const { eq } = require("drizzle-orm");
 const crypto = require("crypto");
 
 const getUserById = async (id) => {
-  const foundUser = await db.query.user.findFirst({
-    where: eq(user.id, id),
-    with: { addresses: true },
-  });
-  if (foundUser) delete foundUser.password;
+  const [foundUser] = await db.select().from(user).where(eq(user.id, id)).limit(1);
+  if (!foundUser) return null;
+
+  const userAddresses = await db.select().from(address).where(eq(address.userId, id));
+  foundUser.addresses = userAddresses;
+
+  delete foundUser.password;
   return foundUser;
 };
 
@@ -43,12 +45,12 @@ const updateUserProfile = async (id, updateData) => {
       }
     }
 
-    const updatedUser = await tx.query.user.findFirst({
-      where: eq(user.id, id),
-      with: { addresses: true },
-    });
-
-    if (updatedUser) delete updatedUser.password;
+    const [updatedUser] = await tx.select().from(user).where(eq(user.id, id)).limit(1);
+    if (updatedUser) {
+      const userAddresses = await tx.select().from(address).where(eq(address.userId, id));
+      updatedUser.addresses = userAddresses;
+      delete updatedUser.password;
+    }
     return updatedUser;
   });
 };

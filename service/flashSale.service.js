@@ -1,75 +1,70 @@
 const { db } = require("../config/db.config");
-const { flashsale, flashsaleproducts } = require("../db/schema");
-const { eq, lte, gte, and, desc } = require("drizzle-orm");
+const { flashsale, flashsaleproducts, product: productTable } = require("../db/schema");
+const { eq, lte, gte, and, desc, inArray } = require("drizzle-orm");
 const crypto = require("crypto");
+const productService = require("./product.service");
 
 const getActiveFlashSale = async () => {
-  const sale = await db.query.flashsale.findFirst({
-    where: and(
+  const [sale] = await db.select()
+    .from(flashsale)
+    .where(and(
       eq(flashsale.isActive, true),
       lte(flashsale.startDate, new Date()),
       gte(flashsale.endDate, new Date())
-    ),
-    with: {
-      flashsaleproducts: {
-        with: {
-          product: {
-            with: {
-              images: true,
-              variants: true,
-              category: true,
-            },
-          },
-        },
-      },
-    },
-    orderBy: [desc(flashsale.createdAt)],
-  });
+    ))
+    .orderBy(desc(flashsale.createdAt))
+    .limit(1);
 
   if (!sale) return null;
 
-  const productsList = sale.flashsaleproducts
-    ? sale.flashsaleproducts.map((fp) => fp.product).filter(Boolean)
-    : [];
+  const fpRows = await db.select({ productId: flashsaleproducts.B })
+    .from(flashsaleproducts)
+    .where(eq(flashsaleproducts.A, sale.id));
+
+  const productIds = fpRows.map((row) => row.productId);
+  let productsList = [];
+  if (productIds.length > 0) {
+    const rawProducts = await db.select().from(productTable).where(inArray(productTable.id, productIds));
+    productsList = await productService.populateProducts(rawProducts);
+  }
 
   const saleToReturn = {
     ...sale,
     products: productsList,
   };
-  delete saleToReturn.flashsaleproducts;
 
   const remaining = Math.max(0, Math.floor((new Date(sale.endDate).getTime() - Date.now()) / 1000));
   return { ...saleToReturn, remainingSeconds: remaining };
 };
 
 const getFlashSale = async () => {
-  const sale = await db.query.flashsale.findFirst({
-    with: {
-      flashsaleproducts: {
-        with: {
-          product: true,
-        },
-      },
-    },
-    orderBy: [desc(flashsale.createdAt)],
-  });
+  const [sale] = await db.select()
+    .from(flashsale)
+    .orderBy(desc(flashsale.createdAt))
+    .limit(1);
 
   if (!sale) return null;
 
-  const productsList = sale.flashsaleproducts
-    ? sale.flashsaleproducts.map((fp) => fp.product).filter(Boolean)
-    : [];
+  const fpRows = await db.select({ productId: flashsaleproducts.B })
+    .from(flashsaleproducts)
+    .where(eq(flashsaleproducts.A, sale.id));
+
+  const productIds = fpRows.map((row) => row.productId);
+  let productsList = [];
+  if (productIds.length > 0) {
+    const rawProducts = await db.select().from(productTable).where(inArray(productTable.id, productIds));
+    productsList = await productService.populateProducts(rawProducts);
+  }
 
   const saleToReturn = {
     ...sale,
     products: productsList,
   };
-  delete saleToReturn.flashsaleproducts;
   return saleToReturn;
 };
 
 const upsertFlashSale = async (data) => {
-  const sale = await db.query.flashsale.findFirst();
+  const [sale] = await db.select().from(flashsale).limit(1);
   
   const { products: productIds, ...rest } = data;
   const restWithDates = { ...rest };
@@ -101,41 +96,38 @@ const upsertFlashSale = async (data) => {
       }
     }
 
-    const updatedSale = await tx.query.flashsale.findFirst({
-      where: eq(flashsale.id, saleId),
-      with: {
-        flashsaleproducts: {
-          with: {
-            product: true,
-          },
-        },
-      },
-    });
+    const [updatedSale] = await tx.select().from(flashsale).where(eq(flashsale.id, saleId)).limit(1);
+    if (!updatedSale) return null;
 
-    const productsList = updatedSale.flashsaleproducts
-      ? updatedSale.flashsaleproducts.map((fp) => fp.product).filter(Boolean)
-      : [];
+    const fpRows = await tx.select({ productId: flashsaleproducts.B })
+      .from(flashsaleproducts)
+      .where(eq(flashsaleproducts.A, saleId));
+
+    const updatedProductIds = fpRows.map((row) => row.productId);
+    let productsList = [];
+    if (updatedProductIds.length > 0) {
+      const rawProducts = await tx.select().from(productTable).where(inArray(productTable.id, updatedProductIds));
+      productsList = await productService.populateProducts(rawProducts, tx);
+    }
 
     const saleToReturn = {
       ...updatedSale,
       products: productsList,
     };
-    delete saleToReturn.flashsaleproducts;
     return saleToReturn;
   });
 };
 
 const toggleFlashSale = async () => {
-  const sale = await db.query.flashsale.findFirst();
+  const [sale] = await db.select().from(flashsale).limit(1);
   if (!sale) return null;
   
   await db.update(flashsale)
     .set({ isActive: !sale.isActive })
     .where(eq(flashsale.id, sale.id));
 
-  return await db.query.flashsale.findFirst({
-    where: eq(flashsale.id, sale.id),
-  });
+  const [updated] = await db.select().from(flashsale).where(eq(flashsale.id, sale.id)).limit(1);
+  return updated;
 };
 
 module.exports = { getActiveFlashSale, getFlashSale, upsertFlashSale, toggleFlashSale };

@@ -1,5 +1,5 @@
 const { db } = require("../config/db.config");
-const { review } = require("../db/schema");
+const { review, product } = require("../db/schema");
 const { eq, and, desc } = require("drizzle-orm");
 const crypto = require("crypto");
 
@@ -14,57 +14,77 @@ const createReview = async (reviewData) => {
     comment: reviewData.comment,
     isApproved: reviewData.isApproved || false,
   });
-  return await db.query.review.findFirst({
-    where: eq(review.id, reviewId),
-  });
+
+  const [created] = await db.select().from(review).where(eq(review.id, reviewId)).limit(1);
+  return created;
 };
 
 const getProductReviews = async (productId) => {
-  return await db.query.review.findMany({
-    where: and(
+  return await db.select()
+    .from(review)
+    .where(and(
       eq(review.productId, productId),
       eq(review.isApproved, true)
-    ),
-    orderBy: [desc(review.createdAt)],
-  });
+    ))
+    .orderBy(desc(review.createdAt));
 };
 
 const getAllApprovedReviews = async () => {
-  return await db.query.review.findMany({
-    where: eq(review.isApproved, true),
-    with: {
-      product: {
-        columns: { name: true },
-      },
+  const rows = await db.select({
+    id: review.id,
+    userId: review.userId,
+    name: review.name,
+    productId: review.productId,
+    rating: review.rating,
+    comment: review.comment,
+    isApproved: review.isApproved,
+    createdAt: review.createdAt,
+    updatedAt: review.updatedAt,
+    product: {
+      name: product.name,
     },
-    orderBy: [desc(review.createdAt)],
-  });
+  })
+  .from(review)
+  .leftJoin(product, eq(review.productId, product.id))
+  .where(eq(review.isApproved, true))
+  .orderBy(desc(review.createdAt));
+
+  return rows;
 };
 
 const getAllReviews = async () => {
-  return await db.query.review.findMany({
-    with: {
-      product: {
-        columns: { name: true },
-      },
+  const rows = await db.select({
+    id: review.id,
+    userId: review.userId,
+    name: review.name,
+    productId: review.productId,
+    rating: review.rating,
+    comment: review.comment,
+    isApproved: review.isApproved,
+    createdAt: review.createdAt,
+    updatedAt: review.updatedAt,
+    product: {
+      name: product.name,
     },
-    orderBy: [desc(review.createdAt)],
-  });
+  })
+  .from(review)
+  .leftJoin(product, eq(review.productId, product.id))
+  .orderBy(desc(review.createdAt));
+
+  return rows;
 };
 
 const updateReviewApproval = async (id, isApproved) => {
   await db.update(review)
     .set({ isApproved })
     .where(eq(review.id, id));
-  return await db.query.review.findFirst({
-    where: eq(review.id, id),
-  });
+
+  const [updated] = await db.select().from(review).where(eq(review.id, id)).limit(1);
+  return updated;
 };
 
 const deleteReview = async (id) => {
-  const deleted = await db.query.review.findFirst({
-    where: eq(review.id, id),
-  });
+  const [deleted] = await db.select().from(review).where(eq(review.id, id)).limit(1);
   if (deleted) {
     await db.delete(review).where(eq(review.id, id));
   }
