@@ -1,5 +1,7 @@
 const jwt = require("jsonwebtoken");
-const { prisma } = require("../config/db.config");
+const { db } = require("../config/db.config");
+const { user: userTable } = require("../db/schema");
+const { eq } = require("drizzle-orm");
 const env = require("../config/env.config");
 
 const protect = async (req, res, next) => {
@@ -10,9 +12,9 @@ const protect = async (req, res, next) => {
       token = req.headers.authorization.split(" ")[1];
       const decoded = jwt.verify(token, env.jwtSecret);
       
-      const user = await prisma.user.findUnique({
-        where: { id: decoded.id },
-        select: {
+      const user = await db.query.user.findFirst({
+        where: eq(userTable.id, decoded.id),
+        columns: {
           id: true,
           name: true,
           email: true,
