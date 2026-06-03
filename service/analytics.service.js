@@ -1,4 +1,7 @@
-const { prisma } = require("../config/db.config");
+const { db, pool } = require("../config/db.config");
+const { visitor, event } = require("../db/schema");
+const { eq, and, desc, asc, lte, gte, lt, count, sum, not, sql, or, like } = require("drizzle-orm");
+const crypto = require("crypto");
 
 const ACTIVE_THRESHOLD_MS = 30 * 60 * 1000;
 
@@ -9,132 +12,152 @@ const recordVisitor = async (data) => {
   if (data.isBot) return null;
 
   try {
-    return await prisma.visitor.upsert({
-      where: { sessionId: data.sessionId },
-      update: {
-        userId: data.userId || null,
-        isLoggedIn: !!data.isLoggedIn,
-        ip: data.ip || "",
-        userAgent: data.userAgent || "",
-        country: data.country || "Unknown",
-        countryCode: data.countryCode || "",
-        city: data.city || "Unknown",
-        region: data.region || "",
-        timezone: data.timezone || "",
-        latitude: data.latitude ?? null,
-        longitude: data.longitude ?? null,
-        browser: data.browser || "Unknown",
-        browserVersion: data.browserVersion || "",
-        os: data.os || "Unknown",
-        osVersion: data.osVersion || "",
-        device: data.device || "desktop",
-        isMobile: !!data.isMobile,
-        isBot: !!data.isBot,
-        language: data.language || "",
-        referrer: data.referrer || "",
-        referrerHost: data.referrerHost || "",
-        landingPage: data.landingPage || data.path || "/",
-        lastSeen: new Date(),
-        isActive: true,
-        pagesViewed: { increment: 1 },
-      },
-      create: {
-        sessionId: data.sessionId,
-        userId: data.userId || null,
-        isLoggedIn: !!data.isLoggedIn,
-        ip: data.ip || "",
-        userAgent: data.userAgent || "",
-        country: data.country || "Unknown",
-        countryCode: data.countryCode || "",
-        city: data.city || "Unknown",
-        region: data.region || "",
-        timezone: data.timezone || "",
-        latitude: data.latitude ?? null,
-        longitude: data.longitude ?? null,
-        browser: data.browser || "Unknown",
-        browserVersion: data.browserVersion || "",
-        os: data.os || "Unknown",
-        osVersion: data.osVersion || "",
-        device: data.device || "desktop",
-        isMobile: !!data.isMobile,
-        isBot: !!data.isBot,
-        language: data.language || "",
-        referrer: data.referrer || "",
-        referrerHost: data.referrerHost || "",
-        landingPage: data.landingPage || data.path || "/",
-        lastSeen: new Date(),
-        isActive: true,
-        pagesViewed: 1,
-      },
+    const insertValues = {
+      id: crypto.randomUUID(),
+      sessionId: data.sessionId,
+      userId: data.userId || null,
+      isLoggedIn: !!data.isLoggedIn,
+      ip: data.ip || "",
+      userAgent: data.userAgent || "",
+      country: data.country || "Unknown",
+      countryCode: data.countryCode || "",
+      city: data.city || "Unknown",
+      region: data.region || "",
+      timezone: data.timezone || "",
+      latitude: data.latitude ?? null,
+      longitude: data.longitude ?? null,
+      browser: data.browser || "Unknown",
+      browserVersion: data.browserVersion || "",
+      os: data.os || "Unknown",
+      osVersion: data.osVersion || "",
+      device: data.device || "desktop",
+      isMobile: !!data.isMobile,
+      isBot: !!data.isBot,
+      language: data.language || "",
+      referrer: data.referrer || "",
+      referrerHost: data.referrerHost || "",
+      landingPage: data.landingPage || data.path || "/",
+      lastSeen: new Date(),
+      isActive: true,
+      pagesViewed: 1,
+    };
+
+    await db.insert(visitor)
+      .values(insertValues)
+      .onDuplicateKeyUpdate({
+        set: {
+          userId: data.userId || null,
+          isLoggedIn: !!data.isLoggedIn,
+          ip: data.ip || "",
+          userAgent: data.userAgent || "",
+          country: data.country || "Unknown",
+          countryCode: data.countryCode || "",
+          city: data.city || "Unknown",
+          region: data.region || "",
+          timezone: data.timezone || "",
+          latitude: data.latitude ?? null,
+          longitude: data.longitude ?? null,
+          browser: data.browser || "Unknown",
+          browserVersion: data.browserVersion || "",
+          os: data.os || "Unknown",
+          osVersion: data.osVersion || "",
+          device: data.device || "desktop",
+          isMobile: !!data.isMobile,
+          isBot: !!data.isBot,
+          language: data.language || "",
+          referrer: data.referrer || "",
+          referrerHost: data.referrerHost || "",
+          landingPage: data.landingPage || data.path || "/",
+          lastSeen: new Date(),
+          isActive: true,
+          pagesViewed: sql`pagesViewed + 1`,
+        }
+      });
+
+    return await db.query.visitor.findFirst({
+      where: eq(visitor.sessionId, data.sessionId),
     });
   } catch (err) {
-    return await prisma.visitor.findUnique({ where: { sessionId: data.sessionId } });
+    return await db.query.visitor.findFirst({
+      where: eq(visitor.sessionId, data.sessionId),
+    });
   }
 };
 
 const updateVisitorActivity = async (sessionId, patch = {}) => {
   if (!sessionId) return null;
-  return await prisma.visitor.update({
-    where: { sessionId },
-    data: { lastSeen: new Date(), isActive: true, ...patch },
+  await db.update(visitor)
+    .set({ lastSeen: new Date(), isActive: true, ...patch })
+    .where(eq(visitor.sessionId, sessionId));
+  return await db.query.visitor.findFirst({
+    where: eq(visitor.sessionId, sessionId),
   });
 };
 
 const endVisitorSession = async (sessionId, durationMs) => {
   if (!sessionId) return null;
-  return await prisma.visitor.update({
-    where: { sessionId },
-    data: {
+  await db.update(visitor)
+    .set({
       isActive: false,
       lastSeen: new Date(),
       durationMs: durationMs || 0,
-    },
+    })
+    .where(eq(visitor.sessionId, sessionId));
+  return await db.query.visitor.findFirst({
+    where: eq(visitor.sessionId, sessionId),
   });
 };
 
 const incrementVisitorEvents = async (sessionId) => {
   if (!sessionId) return null;
-  return await prisma.visitor.update({
-    where: { sessionId },
-    data: {
-      eventsCount: { increment: 1 },
+  await db.update(visitor)
+    .set({
+      eventsCount: sql`eventsCount + 1`,
       lastSeen: new Date(),
       isActive: true,
-    },
+    })
+    .where(eq(visitor.sessionId, sessionId));
+  return await db.query.visitor.findFirst({
+    where: eq(visitor.sessionId, sessionId),
   });
 };
 
 const recordEvent = async (data) => {
   if (!data || !data.type || !data.sessionId) return null;
-  return await prisma.event.create({
-    data: {
-      type: data.type,
-      category: data.category || "engagement",
-      sessionId: data.sessionId,
-      userId: data.userId || null,
-      isLoggedIn: !!data.isLoggedIn,
-      page: data.page || "",
-      path: data.path || "",
-      label: data.label || "",
-      value: typeof data.value === "number" ? data.value : null,
-      currency: data.currency || "",
-      metadata: data.metadata || {},
-      ip: data.ip || "",
-      country: data.country || "Unknown",
-      city: data.city || "Unknown",
-      device: data.device || "desktop",
-      browser: data.browser || "Unknown",
-      timestamp: new Date(),
-    },
+  const eventId = crypto.randomUUID();
+  await db.insert(event).values({
+    id: eventId,
+    type: data.type,
+    category: data.category || "engagement",
+    sessionId: data.sessionId,
+    userId: data.userId || null,
+    isLoggedIn: !!data.isLoggedIn,
+    page: data.page || "",
+    path: data.path || "",
+    label: data.label || "",
+    value: typeof data.value === "number" ? data.value : null,
+    currency: data.currency || "",
+    metadata: data.metadata ? JSON.stringify(data.metadata) : null,
+    ip: data.ip || "",
+    country: data.country || "Unknown",
+    city: data.city || "Unknown",
+    device: data.device || "desktop",
+    browser: data.browser || "Unknown",
+    timestamp: new Date(),
+  });
+  return await db.query.event.findFirst({
+    where: eq(event.id, eventId),
   });
 };
 
 const markInactiveVisitors = async () => {
   const cutoff = getActiveThreshold();
-  return await prisma.visitor.updateMany({
-    where: { isActive: true, lastSeen: { lt: cutoff } },
-    data: { isActive: false },
-  });
+  return await db.update(visitor)
+    .set({ isActive: false })
+    .where(and(
+      eq(visitor.isActive, true),
+      lt(visitor.lastSeen, cutoff)
+    ));
 };
 
 const getOverview = async (days = 30) => {
@@ -148,20 +171,20 @@ const getOverview = async (days = 30) => {
   const last5min = new Date(Date.now() - 5 * 60 * 1000);
 
   const [
-    totalVisitors,
-    totalPageviewsRes,
-    totalEvents,
-    uniqueCountries,
-    uniqueCities,
-    periodVisitors,
-    periodPageviewsRes,
-    periodEvents,
-    periodUniqueSessions,
-    prevPeriodVisitors,
-    prevPeriodPageviewsRes,
-    prevPeriodUniqueSessions,
-    activeVisitors,
-    onlineVisitors,
+    [totalVisitorsRes],
+    [totalPageviewsRes],
+    [totalEventsRes],
+    uniqueCountriesRes,
+    uniqueCitiesRes,
+    [periodVisitorsRes],
+    [periodPageviewsRes],
+    [periodEventsRes],
+    periodUniqueSessionsRes,
+    [prevPeriodVisitorsRes],
+    [prevPeriodPageviewsRes],
+    prevPeriodUniqueSessionsRes,
+    [activeVisitorsRes],
+    [onlineVisitorsRes],
     topCountries,
     topCities,
     topBrowsers,
@@ -170,98 +193,46 @@ const getOverview = async (days = 30) => {
     topPages,
     deviceBreakdown,
   ] = await Promise.all([
-    prisma.visitor.count({ where: { isBot: false } }),
-    prisma.visitor.aggregate({
-      _sum: { pagesViewed: true },
-      where: { isBot: false },
-    }),
-    prisma.event.count(),
-    prisma.visitor.findMany({
-      where: { isBot: false },
-      select: { country: true },
-      distinct: ["country"],
-    }),
-    prisma.visitor.findMany({
-      where: { isBot: false },
-      select: { city: true },
-      distinct: ["city"],
-    }),
-    prisma.visitor.count({ where: { isBot: false, createdAt: { gte: start } } }),
-    prisma.visitor.aggregate({
-      _sum: { pagesViewed: true },
-      where: { isBot: false, createdAt: { gte: start } },
-    }),
-    prisma.event.count({ where: { timestamp: { gte: start } } }),
-    prisma.visitor.findMany({
-      where: { isBot: false, createdAt: { gte: start } },
-      select: { sessionId: true },
-      distinct: ["sessionId"],
-    }),
-    prisma.visitor.count({ where: { isBot: false, createdAt: { gte: prevStart, lt: start } } }),
-    prisma.visitor.aggregate({
-      _sum: { pagesViewed: true },
-      where: { isBot: false, createdAt: { gte: prevStart, lt: start } },
-    }),
-    prisma.visitor.findMany({
-      where: { isBot: false, createdAt: { gte: prevStart, lt: start } },
-      select: { sessionId: true },
-      distinct: ["sessionId"],
-    }),
-    prisma.visitor.count({
-      where: { isBot: false, isActive: true, lastSeen: { gte: getActiveThreshold() } },
-    }),
-    prisma.visitor.count({ where: { isBot: false, lastSeen: { gte: last5min } } }),
-    prisma.visitor.groupBy({
-      by: ["country"],
-      where: { isBot: false },
-      _count: { _all: true },
-      orderBy: { _count: { country: "desc" } },
-      take: 10,
-    }),
-    prisma.visitor.groupBy({
-      by: ["country", "city"],
-      where: { isBot: false },
-      _count: { _all: true },
-      orderBy: { _count: { _all: "desc" } },
-      take: 10,
-    }),
-    prisma.visitor.groupBy({
-      by: ["browser"],
-      where: { isBot: false },
-      _count: { _all: true },
-      orderBy: { _count: { browser: "desc" } },
-      take: 8,
-    }),
-    prisma.visitor.groupBy({
-      by: ["device"],
-      where: { isBot: false },
-      _count: { _all: true },
-      orderBy: { _count: { device: "desc" } },
-    }),
-    prisma.visitor.groupBy({
-      by: ["referrerHost"],
-      where: { isBot: false, referrerHost: { not: "" } },
-      _count: { _all: true },
-      orderBy: { _count: { referrerHost: "desc" } },
-      take: 10,
-    }),
-    prisma.visitor.groupBy({
-      by: ["landingPage"],
-      where: { isBot: false },
-      _count: { _all: true },
-      orderBy: { _count: { landingPage: "desc" } },
-      take: 10,
-    }),
-    prisma.visitor.groupBy({
-      by: ["isMobile"],
-      where: { isBot: false },
-      _count: { _all: true },
-    }),
+    db.select({ value: count() }).from(visitor).where(eq(visitor.isBot, false)),
+    db.select({ value: sum(visitor.pagesViewed) }).from(visitor).where(eq(visitor.isBot, false)),
+    db.select({ value: count() }).from(event),
+    db.select({ country: visitor.country }).from(visitor).where(eq(visitor.isBot, false)).groupBy(visitor.country),
+    db.select({ city: visitor.city }).from(visitor).where(eq(visitor.isBot, false)).groupBy(visitor.city),
+    db.select({ value: count() }).from(visitor).where(and(eq(visitor.isBot, false), gte(visitor.createdAt, start))),
+    db.select({ value: sum(visitor.pagesViewed) }).from(visitor).where(and(eq(visitor.isBot, false), gte(visitor.createdAt, start))),
+    db.select({ value: count() }).from(event).where(gte(event.timestamp, start)),
+    db.select({ sessionId: visitor.sessionId }).from(visitor).where(and(eq(visitor.isBot, false), gte(visitor.createdAt, start))).groupBy(visitor.sessionId),
+    db.select({ value: count() }).from(visitor).where(and(eq(visitor.isBot, false), gte(visitor.createdAt, prevStart), lt(visitor.createdAt, start))),
+    db.select({ value: sum(visitor.pagesViewed) }).from(visitor).where(and(eq(visitor.isBot, false), gte(visitor.createdAt, prevStart), lt(visitor.createdAt, start))),
+    db.select({ sessionId: visitor.sessionId }).from(visitor).where(and(eq(visitor.isBot, false), gte(visitor.createdAt, prevStart), lt(visitor.createdAt, start))).groupBy(visitor.sessionId),
+    db.select({ value: count() }).from(visitor).where(and(eq(visitor.isBot, false), eq(visitor.isActive, true), gte(visitor.lastSeen, getActiveThreshold()))),
+    db.select({ value: count() }).from(visitor).where(and(eq(visitor.isBot, false), gte(visitor.lastSeen, last5min))),
+    db.select({ country: visitor.country, cnt: count() }).from(visitor).where(eq(visitor.isBot, false)).groupBy(visitor.country).orderBy(desc(count())).limit(10),
+    db.select({ country: visitor.country, city: visitor.city, cnt: count() }).from(visitor).where(eq(visitor.isBot, false)).groupBy(visitor.country, visitor.city).orderBy(desc(count())).limit(10),
+    db.select({ browser: visitor.browser, cnt: count() }).from(visitor).where(eq(visitor.isBot, false)).groupBy(visitor.browser).orderBy(desc(count())).limit(8),
+    db.select({ device: visitor.device, cnt: count() }).from(visitor).where(eq(visitor.isBot, false)).groupBy(visitor.device).orderBy(desc(count())),
+    db.select({ referrerHost: visitor.referrerHost, cnt: count() }).from(visitor).where(and(eq(visitor.isBot, false), not(eq(visitor.referrerHost, "")))).groupBy(visitor.referrerHost).orderBy(desc(count())).limit(10),
+    db.select({ landingPage: visitor.landingPage, cnt: count() }).from(visitor).where(eq(visitor.isBot, false)).groupBy(visitor.landingPage).orderBy(desc(count())).limit(10),
+    db.select({ isMobile: visitor.isMobile, cnt: count() }).from(visitor).where(eq(visitor.isBot, false)).groupBy(visitor.isMobile),
   ]);
 
-  const totalPageviews = totalPageviewsRes._sum.pagesViewed || 0;
-  const periodPageviews = periodPageviewsRes._sum.pagesViewed || 0;
-  const prevPageviews = prevPeriodPageviewsRes._sum.pagesViewed || 0;
+  const totalVisitors = totalVisitorsRes.value;
+  const totalPageviews = Number(totalPageviewsRes.value || 0);
+  const totalEvents = totalEventsRes.value;
+  const uniqueCountriesCount = uniqueCountriesRes.length;
+  const uniqueCitiesCount = uniqueCitiesRes.length;
+
+  const periodVisitors = periodVisitorsRes.value;
+  const periodPageviews = Number(periodPageviewsRes.value || 0);
+  const periodEvents = periodEventsRes.value;
+  const periodUniqueSessionsCount = periodUniqueSessionsRes.length;
+
+  const prevPeriodVisitors = prevPeriodVisitorsRes.value;
+  const prevPageviews = Number(prevPeriodPageviewsRes.value || 0);
+  const prevPeriodUniqueSessionsCount = prevPeriodUniqueSessionsRes.length;
+
+  const activeVisitors = activeVisitorsRes.value;
+  const onlineVisitors = onlineVisitorsRes.value;
 
   const changePct = (curr, prev) => {
     if (prev === 0) return curr > 0 ? 100 : 0;
@@ -274,35 +245,35 @@ const getOverview = async (days = 30) => {
       visitors: totalVisitors,
       pageviews: totalPageviews,
       events: totalEvents,
-      countries: uniqueCountries.length,
-      cities: uniqueCities.length,
+      countries: uniqueCountriesCount,
+      cities: uniqueCitiesCount,
     },
     periodStats: {
       visitors: periodVisitors,
       pageviews: periodPageviews,
       events: periodEvents,
-      uniqueSessions: periodUniqueSessions.length,
+      uniqueSessions: periodUniqueSessionsCount,
     },
     periodChange: {
       visitors: changePct(periodVisitors, prevPeriodVisitors),
       pageviews: changePct(periodPageviews, prevPageviews),
-      uniqueSessions: changePct(periodUniqueSessions.length, prevPeriodUniqueSessions.length),
+      uniqueSessions: changePct(periodUniqueSessionsCount, prevPeriodUniqueSessionsCount),
     },
     live: {
       active: activeVisitors,
       online: onlineVisitors,
     },
-    topCountries: topCountries.map((c) => ({ country: c.country, count: c._count._all })),
+    topCountries: topCountries.map((c) => ({ country: c.country, count: c.cnt })),
     topCities: topCities.map((c) => ({
       country: c.country,
       city: c.city,
-      count: c._count._all,
+      count: c.cnt,
     })),
-    topBrowsers: topBrowsers.map((b) => ({ browser: b.browser, count: b._count._all })),
-    topDevices: topDevices.map((d) => ({ device: d.device, count: d._count._all })),
-    topReferrers: topReferrers.map((r) => ({ referrer: r.referrerHost, count: r._count._all })),
-    topPages: topPages.map((p) => ({ path: p.landingPage, count: p._count._all })),
-    deviceBreakdown: deviceBreakdown.map((d) => ({ type: d.isMobile ? "mobile" : "desktop", count: d._count._all })),
+    topBrowsers: topBrowsers.map((b) => ({ browser: b.browser, count: b.cnt })),
+    topDevices: topDevices.map((d) => ({ device: d.device, count: d.cnt })),
+    topReferrers: topReferrers.map((r) => ({ referrer: r.referrerHost, count: r.cnt })),
+    topPages: topPages.map((p) => ({ path: p.landingPage, count: p.cnt })),
+    deviceBreakdown: deviceBreakdown.map((d) => ({ type: d.isMobile ? "mobile" : "desktop", count: d.cnt })),
   };
 };
 
@@ -311,54 +282,57 @@ const getTimeline = async (days = 7) => {
   start.setDate(start.getDate() - days);
   start.setHours(0, 0, 0, 0);
 
-  // Prisma doesn't support dateToString in groupBy directly yet without raw SQL for MySQL
-  // We'll use raw query for time-series data to be efficient
-  const visitorsByDay = await prisma.$queryRaw`
-    SELECT DATE(createdAt) as date, COUNT(*) as visitors, SUM(pagesViewed) as pageviews
-    FROM Visitor
-    WHERE isBot = 0 AND createdAt >= ${start}
-    GROUP BY DATE(createdAt)
-    ORDER BY date ASC
-  `;
+  const [visitorsByDayRows] = await pool.query(
+    "SELECT DATE(createdAt) as date, COUNT(*) as visitors, SUM(pagesViewed) as pageviews FROM `visitor` WHERE isBot = 0 AND createdAt >= ? GROUP BY DATE(createdAt) ORDER BY date ASC",
+    [start]
+  );
 
-  const eventsByDay = await prisma.$queryRaw`
-    SELECT DATE(timestamp) as date, COUNT(*) as events
-    FROM Event
-    WHERE timestamp >= ${start}
-    GROUP BY DATE(timestamp)
-    ORDER BY date ASC
-  `;
+  const [eventsByDayRows] = await pool.query(
+    "SELECT DATE(timestamp) as date, COUNT(*) as events FROM `event` WHERE timestamp >= ? GROUP BY DATE(timestamp) ORDER BY date ASC",
+    [start]
+  );
 
-  const eventsByType = await prisma.event.groupBy({
-    by: ["type"],
-    where: { timestamp: { gte: start } },
-    _count: { _all: true },
-    orderBy: { _count: { type: "desc" } },
-    take: 15,
-  });
+  const eventsByType = await db.select({
+    type: event.type,
+    cnt: count(),
+  })
+  .from(event)
+  .where(gte(event.timestamp, start))
+  .groupBy(event.type)
+  .orderBy(desc(count()))
+  .limit(15);
 
   return {
-    visitorsByDay: visitorsByDay.map((d) => ({
-      date: d.date.toISOString().split("T")[0],
-      visitors: Number(d.visitors),
-      pageviews: Number(d.pageviews),
-      events: 0,
-    })),
-    eventsByDay: eventsByDay.map((d) => ({
-      date: d.date.toISOString().split("T")[0],
-      events: Number(d.events),
-    })),
-    eventsByType: eventsByType.map((e) => ({ type: e.type, count: e._count._all })),
+    visitorsByDay: visitorsByDayRows.map((d) => {
+      const dateObj = d.date instanceof Date ? d.date : new Date(d.date);
+      return {
+        date: dateObj.toISOString().split("T")[0],
+        visitors: Number(d.visitors),
+        pageviews: Number(d.pageviews),
+        events: 0,
+      };
+    }),
+    eventsByDay: eventsByDayRows.map((d) => {
+      const dateObj = d.date instanceof Date ? d.date : new Date(d.date);
+      return {
+        date: dateObj.toISOString().split("T")[0],
+        events: Number(d.events),
+      };
+    }),
+    eventsByType: eventsByType.map((e) => ({ type: e.type, count: e.cnt })),
   };
 };
 
 const getLiveVisitors = async (limit = 50) => {
   const threshold = new Date(Date.now() - 5 * 60 * 1000);
-  return await prisma.visitor.findMany({
-    where: { isBot: false, lastSeen: { gte: threshold } },
-    orderBy: { lastSeen: "desc" },
-    take: limit,
-    select: {
+  return await db.query.visitor.findMany({
+    where: and(
+      eq(visitor.isBot, false),
+      gte(visitor.lastSeen, threshold)
+    ),
+    orderBy: [desc(visitor.lastSeen)],
+    limit: limit,
+    columns: {
       sessionId: true,
       userId: true,
       isLoggedIn: true,
@@ -377,68 +351,70 @@ const getLiveVisitors = async (limit = 50) => {
 };
 
 const getRecentVisitors = async ({ page = 1, limit = 50, country, device, search } = {}) => {
-  const where = { isBot: false };
-  if (country) where.country = country;
-  if (device) where.device = device;
+  const conditions = [eq(visitor.isBot, false)];
+  if (country) conditions.push(eq(visitor.country, country));
+  if (device) conditions.push(eq(visitor.device, device));
   if (search) {
-    where.OR = [
-      { landingPage: { contains: search } },
-      { referrerHost: { contains: search } },
-      { city: { contains: search } },
-      { ip: { contains: search } },
-    ];
+    conditions.push(or(
+      like(visitor.landingPage, `%${search}%`),
+      like(visitor.referrerHost, `%${search}%`),
+      like(visitor.city, `%${search}%`),
+      like(visitor.ip, `%${search}%`)
+    ));
   }
 
   const skip = (page - 1) * limit;
-  const [items, total] = await Promise.all([
-    prisma.visitor.findMany({
-      where,
-      orderBy: { lastSeen: "desc" },
-      skip,
-      take: limit,
-      select: {
-        sessionId: true,
-        userId: true,
-        isLoggedIn: true,
-        ip: true,
-        country: true,
-        city: true,
-        device: true,
-        browser: true,
-        os: true,
-        pagesViewed: true,
-        eventsCount: true,
-        landingPage: true,
-        referrerHost: true,
-        durationMs: true,
-        lastSeen: true,
-        isMobile: true,
-      },
-    }),
-    prisma.visitor.count({ where }),
-  ]);
+  const items = await db.query.visitor.findMany({
+    where: and(...conditions),
+    orderBy: [desc(visitor.lastSeen)],
+    offset: skip,
+    limit: limit,
+    columns: {
+      sessionId: true,
+      userId: true,
+      isLoggedIn: true,
+      ip: true,
+      country: true,
+      city: true,
+      device: true,
+      browser: true,
+      os: true,
+      pagesViewed: true,
+      eventsCount: true,
+      landingPage: true,
+      referrerHost: true,
+      durationMs: true,
+      lastSeen: true,
+      isMobile: true,
+    },
+  });
 
-  return { items, total, page, limit };
+  const [totalRes] = await db.select({ value: count() })
+    .from(visitor)
+    .where(and(...conditions));
+
+  return { items, total: totalRes.value, page, limit };
 };
 
 const getRecentEvents = async ({ page = 1, limit = 100, type, category, sessionId } = {}) => {
-  const where = {};
-  if (type) where.type = type;
-  if (category) where.category = category;
-  if (sessionId) where.sessionId = sessionId;
+  const conditions = [];
+  if (type) conditions.push(eq(event.type, type));
+  if (category) conditions.push(eq(event.category, category));
+  if (sessionId) conditions.push(eq(event.sessionId, sessionId));
 
   const skip = (page - 1) * limit;
-  const [items, total] = await Promise.all([
-    prisma.event.findMany({
-      where,
-      orderBy: { timestamp: "desc" },
-      skip,
-      take: limit,
-    }),
-    prisma.event.count({ where }),
-  ]);
+  const items = await db.query.event.findMany({
+    where: conditions.length > 0 ? and(...conditions) : undefined,
+    orderBy: [desc(event.timestamp)],
+    offset: skip,
+    limit: limit,
+  });
 
-  return { items, total, page, limit };
+  const [totalRes] = await db.select({ value: count() })
+    .from(event)
+    .where(conditions.length > 0 ? and(...conditions) : undefined);
+
+  return { items, total: totalRes.value, page, limit };
 };
 
 const getActions = async (days = 30) => {
@@ -446,53 +422,67 @@ const getActions = async (days = 30) => {
   start.setDate(start.getDate() - days);
 
   const [byType, byCategory, byCountry, recentPurchases, funnel] = await Promise.all([
-    prisma.event.groupBy({
-      by: ["type"],
-      where: { timestamp: { gte: start } },
-      _count: { _all: true },
-      orderBy: { _count: { type: "desc" } },
+    db.select({
+      type: event.type,
+      cnt: count(),
+    })
+    .from(event)
+    .where(gte(event.timestamp, start))
+    .groupBy(event.type)
+    .orderBy(desc(count())),
+
+    db.select({
+      category: event.category,
+      cnt: count(),
+    })
+    .from(event)
+    .where(gte(event.timestamp, start))
+    .groupBy(event.category)
+    .orderBy(desc(count())),
+
+    db.select({
+      country: event.country,
+      type: event.type,
+      cnt: count(),
+    })
+    .from(event)
+    .where(gte(event.timestamp, start))
+    .groupBy(event.country, event.type)
+    .orderBy(desc(count())),
+
+    db.query.event.findMany({
+      where: and(
+        eq(event.type, "purchase"),
+        gte(event.timestamp, start)
+      ),
+      orderBy: [desc(event.timestamp)],
+      limit: 20,
     }),
-    prisma.event.groupBy({
-      by: ["category"],
-      where: { timestamp: { gte: start } },
-      _count: { _all: true },
-      orderBy: { _count: { category: "desc" } },
-    }),
-    prisma.event.groupBy({
-      by: ["country", "type"],
-      where: { timestamp: { gte: start } },
-      _count: { _all: true },
-      orderBy: { _count: { _all: "desc" } },
-    }),
-    prisma.event.findMany({
-      where: { type: "purchase", timestamp: { gte: start } },
-      orderBy: { timestamp: "desc" },
-      take: 20,
-    }),
+
     (async () => {
       const types = ["product_view", "add_to_cart", "checkout_start", "purchase"];
-      const counts = await Promise.all(
-        types.map((type) =>
-          prisma.event
-            .findMany({
-              where: { timestamp: { gte: start }, type },
-              select: { sessionId: true },
-              distinct: ["sessionId"],
-            })
-            .then((r) => r.length)
-        )
-      );
-      return types.map((t, i) => ({ step: t, count: counts[i] }));
+      const countsList = [];
+      for (const t of types) {
+        const res = await db.select({ sessionId: event.sessionId })
+          .from(event)
+          .where(and(
+            gte(event.timestamp, start),
+            eq(event.type, t)
+          ))
+          .groupBy(event.sessionId);
+        countsList.push(res.length);
+      }
+      return types.map((t, i) => ({ step: t, count: countsList[i] }));
     })(),
   ]);
 
   return {
-    byType: byType.map((t) => ({ type: t.type, count: t._count._all })),
-    byCategory: byCategory.map((c) => ({ category: c.category, count: c._count._all })),
+    byType: byType.map((t) => ({ type: t.type, count: t.cnt })),
+    byCategory: byCategory.map((c) => ({ category: c.category, count: c.cnt })),
     byCountry: byCountry.map((c) => ({
       country: c.country,
       type: c.type,
-      count: c._count._all,
+      count: c.cnt,
     })),
     recentPurchases: recentPurchases.map((p) => ({
       sessionId: p.sessionId,
@@ -509,11 +499,11 @@ const getActions = async (days = 30) => {
 };
 
 const getSessions = async (limit = 50) => {
-  return await prisma.visitor.findMany({
-    where: { isBot: false },
-    orderBy: { lastSeen: "desc" },
-    take: limit,
-    select: {
+  return await db.query.visitor.findMany({
+    where: eq(visitor.isBot, false),
+    orderBy: [desc(visitor.lastSeen)],
+    limit: limit,
+    columns: {
       sessionId: true,
       userId: true,
       isLoggedIn: true,
