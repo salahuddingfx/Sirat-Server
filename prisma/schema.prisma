@@ -1,13 +1,320 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Get a free hosted Postgres database in seconds: `npx create-db`
-
 generator client {
-  provider = "prisma-client"
-  output   = "../generated/prisma"
+  provider = "prisma-client-js"
 }
 
 datasource db {
   provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  user
+  admin
+}
+
+model User {
+  id        String    @id @default(cuid())
+  name      String
+  email     String    @unique
+  username  String?   @unique
+  phone     String?   @unique
+  password  String
+  role      Role      @default(user)
+  avatar    String?
+  addresses Address[]
+  orders    Order[]
+  reviews   Review[]
+  events    Event[]
+  visitors  Visitor[]
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+}
+
+model Address {
+  id        String  @id @default(cuid())
+  street    String?
+  city      String?
+  state     String?
+  zipCode   String?
+  country   String  @default("Bangladesh")
+  isDefault Boolean @default(false)
+  user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String
+}
+
+model Category {
+  id        String    @id @default(cuid())
+  name      String    @unique
+  image     String
+  featured  Boolean   @default(false)
+  products  Product[]
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+}
+
+enum ProductStatus {
+  Live
+  Alert
+  Draft
+}
+
+model Product {
+  id             String           @id @default(cuid())
+  name           String
+  description    String           @db.Text
+  price          Float
+  oldPrice       Float?
+  costPrice      Float            @default(0)
+  packagingCost  Float            @default(0)
+  managementCost Float            @default(0)
+  otherCost      Float            @default(0)
+  stock          Int              @default(0)
+  status         ProductStatus    @default(Live)
+  weight         Float            @default(0.35)
+  slug           String           @unique
+  rating         Float            @default(0)
+  featured       Boolean          @default(false)
+  category       Category         @relation(fields: [categoryId], references: [id])
+  categoryId     String
+  images         ProductImage[]
+  variants       ProductVariant[]
+  reviews        Review[]
+  orderItems     OrderItem[]
+  flashSales     FlashSale[]      @relation("FlashSaleProducts")
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+}
+
+model ProductImage {
+  id        String  @id @default(cuid())
+  url       String
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  productId String
+}
+
+model ProductVariant {
+  id         String  @id @default(cuid())
+  label      String
+  priceDelta Float   @default(0)
+  stock      Int     @default(0)
+  product    Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  productId  String
+}
+
+enum PaymentMethod {
+  cod
+  bkash
+  nagad
+}
+
+enum PaymentStatus {
+  pending
+  approved
+  rejected
+}
+
+enum OrderStatus {
+  received
+  confirmed
+  packed
+  shipped
+  delivered
+  cancelled
+  returned
+}
+
+model Order {
+  id             String        @id @default(cuid())
+  orderId        String        @unique
+  user           User?         @relation(fields: [userId], references: [id])
+  userId         String?
+  guestName      String?
+  guestEmail     String?
+  guestPhone     String?
+  guestAddress   String?
+  guestCity      String?
+  guestZipCode   String?
+  items          OrderItem[]
+  shippingCharge Float
+  totalAmount    Float
+  paymentMethod  PaymentMethod @default(cod)
+  senderNumber   String?
+  txId           String?
+  paymentStatus  PaymentStatus @default(pending)
+  status         OrderStatus   @default(received)
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+}
+
+model OrderItem {
+  id        String  @id @default(cuid())
+  product   Product @relation(fields: [productId], references: [id])
+  productId String
+  quantity  Int
+  variant   String?
+  price     Float
+  order     Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  orderId   String
+}
+
+model Review {
+  id         String   @id @default(cuid())
+  user       User?    @relation(fields: [userId], references: [id])
+  userId     String?
+  name       String
+  product    Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  productId  String
+  rating     Int
+  comment    String   @db.Text
+  isApproved Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+enum DiscountType {
+  percentage
+  fixed
+}
+
+model Coupon {
+  id            String       @id @default(cuid())
+  code          String       @unique
+  discountType  DiscountType @default(percentage)
+  discountValue Float
+  minPurchase   Float        @default(0)
+  expiryDate    DateTime?
+  isActive      Boolean      @default(true)
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+}
+
+model FlashSale {
+  id               String    @id @default(cuid())
+  isActive         Boolean   @default(false)
+  title            String    @default("Flash Sale")
+  discountPercent  Float     @default(0)
+  startDate        DateTime?
+  endDate          DateTime?
+  countdownSeconds Int       @default(86400)
+  products         Product[] @relation("FlashSaleProducts")
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+}
+
+model HeroSlide {
+  id          String   @id @default(cuid())
+  image       String
+  title       String
+  subtitle    String?
+  description String?  @db.Text
+  actionText  String   @default("Shop Now")
+  link        String   @default("/shop")
+  isActive    Boolean  @default(true)
+  order       Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Contact {
+  id        String   @id @default(cuid())
+  name      String
+  email     String
+  message   String   @db.Text
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Visitor {
+  id               String   @id @default(cuid())
+  sessionId        String
+  user             User?    @relation(fields: [userId], references: [id])
+  userId           String?
+  isLoggedIn       Boolean  @default(false)
+  ip               String   @default("")
+  userAgent        String   @default("") @db.Text
+  country          String   @default("Unknown")
+  countryCode      String   @default("")
+  city             String   @default("Unknown")
+  region           String   @default("")
+  timezone         String   @default("")
+  latitude         Float?
+  longitude        Float?
+  browser          String   @default("Unknown")
+  browserVersion   String   @default("")
+  os               String   @default("Unknown")
+  osVersion        String   @default("")
+  device           String   @default("desktop")
+  isMobile         Boolean  @default(false)
+  isBot            Boolean  @default(false)
+  referrer         String   @default("") @db.Text
+  referrerHost     String   @default("")
+  landingPage      String   @default("") @db.Text
+  screenResolution String   @default("")
+  language         String   @default("")
+  pagesViewed      Int      @default(1)
+  eventsCount      Int      @default(0)
+  durationMs       Int      @default(0)
+  lastSeen         DateTime @default(now())
+  isActive         Boolean  @default(true)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@index([sessionId])
+  @@index([lastSeen])
+  @@index([isActive])
+}
+
+model Event {
+  id         String   @id @default(cuid())
+  type       String
+  category   String   @default("engagement")
+  sessionId  String
+  user       User?    @relation(fields: [userId], references: [id])
+  userId     String?
+  isLoggedIn Boolean  @default(false)
+  page       String   @default("")
+  path       String   @default("")
+  label      String   @default("")
+  value      Float?
+  currency   String   @default("")
+  metadata   Json?
+  ip         String   @default("")
+  country    String   @default("Unknown")
+  city       String   @default("Unknown")
+  device     String   @default("desktop")
+  browser    String   @default("Unknown")
+  timestamp  DateTime @default(now())
+
+  @@index([type])
+  @@index([sessionId])
+  @@index([timestamp])
+}
+
+model Settings {
+  id              String   @id @default(cuid())
+  phone           String   @default("+880 1700 000000")
+  email           String   @default("hello@siratclothing.com")
+  address         String   @default("Dhaka, Bangladesh")
+  facebook        String   @default("https://www.facebook.com/sirat2026")
+  instagram       String   @default("https://instagram.com")
+  whatsapp        String   @default("https://wa.me/8801700000000")
+  tagline         String   @default("Purity in Every Step")
+  description     String   @default("আপনার পোশাকে আসুক শুদ্ধতার ছোঁয়া। আমরা বিশ্বাস করি কোয়ালিটি এবং সততায়। imported premium fabric এবং 100% combed cotton এ তৈরি কাস্টম প্রিন্টেড টি-শার্টের নির্ভরযোগ্য ঠিকানা।") @db.Text
+  logo            String   @default("")
+  bkashNumber     String   @default("")
+  nagadNumber     String   @default("")
+  rocketNumber    String   @default("")
+  pinterest       String   @default("")
+  youtube         String   @default("")
+  tiktok          String   @default("")
+  twitter         String   @default("")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+model Counter {
+  id    String @id @default(cuid())
+  name  String @unique
+  count Int    @default(0)
 }
