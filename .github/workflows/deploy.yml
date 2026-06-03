@@ -24,6 +24,7 @@ jobs:
           local-dir: ./
           server-dir: sirat-api.salahuddin.codes/
           dangerous-clean-slate: false
+          timeout: 190000
           exclude: |
             **/node_modules/**
             **/.env
