@@ -1,0 +1,338 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "mysql"
+}
+
+model address {
+  id        String  @id
+  street    String?
+  city      String?
+  state     String?
+  zipCode   String?
+  country   String  @default("Bangladesh")
+  isDefault Boolean @default(false)
+  userId    String
+  user      user    @relation(fields: [userId], references: [id], onDelete: Cascade, map: "Address_userId_fkey")
+
+  @@index([userId], map: "Address_userId_fkey")
+}
+
+model category {
+  id        String    @id
+  name      String    @unique(map: "Category_name_key")
+  image     String
+  featured  Boolean   @default(false)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime
+  product   product[]
+}
+
+model contact {
+  id        String   @id
+  name      String
+  email     String
+  message   String   @db.Text
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime
+}
+
+model counter {
+  id    String @id
+  name  String @unique(map: "Counter_name_key")
+  count Int    @default(0)
+}
+
+model coupon {
+  id            String              @id
+  code          String              @unique(map: "Coupon_code_key")
+  discountType  coupon_discountType @default(percentage)
+  discountValue Float
+  minPurchase   Float               @default(0)
+  expiryDate    DateTime?
+  isActive      Boolean             @default(true)
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime
+}
+
+model event {
+  id         String   @id
+  type       String
+  category   String   @default("engagement")
+  sessionId  String
+  userId     String?
+  isLoggedIn Boolean  @default(false)
+  page       String   @default("")
+  path       String   @default("")
+  label      String   @default("")
+  value      Float?
+  currency   String   @default("")
+  metadata   String?  @db.LongText
+  ip         String   @default("")
+  country    String   @default("Unknown")
+  city       String   @default("Unknown")
+  device     String   @default("desktop")
+  browser    String   @default("Unknown")
+  timestamp  DateTime @default(now())
+  user       user?    @relation(fields: [userId], references: [id], map: "Event_userId_fkey")
+
+  @@index([sessionId], map: "Event_sessionId_idx")
+  @@index([timestamp], map: "Event_timestamp_idx")
+  @@index([type], map: "Event_type_idx")
+  @@index([userId], map: "Event_userId_fkey")
+}
+
+model flashsale {
+  id               String    @id
+  isActive         Boolean   @default(false)
+  title            String    @default("Flash Sale")
+  discountPercent  Float     @default(0)
+  startDate        DateTime?
+  endDate          DateTime?
+  countdownSeconds Int       @default(86400)
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime
+  product          product[] @relation("flashsaleproducts")
+}
+
+model heroslide {
+  id          String   @id
+  image       String
+  title       String
+  subtitle    String?
+  description String?  @db.Text
+  actionText  String   @default("Shop Now")
+  link        String   @default("/shop")
+  isActive    Boolean  @default(true)
+  order       Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime
+}
+
+model order {
+  id             String              @id
+  orderId        String              @unique(map: "Order_orderId_key")
+  userId         String?
+  guestName      String?
+  guestEmail     String?
+  guestPhone     String?
+  guestAddress   String?
+  guestCity      String?
+  guestZipCode   String?
+  shippingCharge Float
+  totalAmount    Float
+  paymentMethod  order_paymentMethod @default(cod)
+  senderNumber   String?
+  txId           String?
+  paymentStatus  order_paymentStatus @default(pending)
+  status         order_status        @default(received)
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime
+  user           user?               @relation(fields: [userId], references: [id], map: "Order_userId_fkey")
+  orderitem      orderitem[]
+
+  @@index([userId], map: "Order_userId_fkey")
+}
+
+model orderitem {
+  id        String  @id
+  productId String
+  quantity  Int
+  variant   String?
+  price     Float
+  orderId   String
+  order     order   @relation(fields: [orderId], references: [id], onDelete: Cascade, map: "OrderItem_orderId_fkey")
+  product   product @relation(fields: [productId], references: [id], map: "OrderItem_productId_fkey")
+
+  @@index([orderId], map: "OrderItem_orderId_fkey")
+  @@index([productId], map: "OrderItem_productId_fkey")
+}
+
+model product {
+  id             String           @id
+  name           String
+  description    String           @db.Text
+  price          Float
+  oldPrice       Float?
+  costPrice      Float            @default(0)
+  packagingCost  Float            @default(0)
+  managementCost Float            @default(0)
+  otherCost      Float            @default(0)
+  stock          Int              @default(0)
+  status         product_status   @default(Live)
+  weight         Float            @default(0.35)
+  slug           String           @unique(map: "Product_slug_key")
+  rating         Float            @default(0)
+  featured       Boolean          @default(false)
+  categoryId     String
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime
+  orderitem      orderitem[]
+  category       category         @relation(fields: [categoryId], references: [id], map: "Product_categoryId_fkey")
+  productimage   productimage[]
+  productvariant productvariant[]
+  review         review[]
+  flashsale      flashsale[]      @relation("flashsaleproducts")
+
+  @@index([categoryId], map: "Product_categoryId_fkey")
+}
+
+model productimage {
+  id        String  @id
+  url       String
+  productId String
+  product   product @relation(fields: [productId], references: [id], onDelete: Cascade, map: "ProductImage_productId_fkey")
+
+  @@index([productId], map: "ProductImage_productId_fkey")
+}
+
+model productvariant {
+  id         String  @id
+  label      String
+  priceDelta Float   @default(0)
+  stock      Int     @default(0)
+  productId  String
+  product    product @relation(fields: [productId], references: [id], onDelete: Cascade, map: "ProductVariant_productId_fkey")
+
+  @@index([productId], map: "ProductVariant_productId_fkey")
+}
+
+model review {
+  id         String   @id
+  userId     String?
+  name       String
+  productId  String
+  rating     Int
+  comment    String   @db.Text
+  isApproved Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime
+  product    product  @relation(fields: [productId], references: [id], onDelete: Cascade, map: "Review_productId_fkey")
+  user       user?    @relation(fields: [userId], references: [id], map: "Review_userId_fkey")
+
+  @@index([productId], map: "Review_productId_fkey")
+  @@index([userId], map: "Review_userId_fkey")
+}
+
+model settings {
+  id           String   @id
+  phone        String   @default("+880 1700 000000")
+  email        String   @default("hello@siratclothing.com")
+  address      String   @default("Dhaka, Bangladesh")
+  facebook     String   @default("https://www.facebook.com/sirat2026")
+  instagram    String   @default("https://instagram.com")
+  whatsapp     String   @default("https://wa.me/8801700000000")
+  tagline      String   @default("Purity in Every Step")
+  description  String   @default("আপনার পোশাকে আসুক শুদ্ধতার ছোঁয়া। আমরা বিশ্বাস করি কোয়ালিটি এবং সততায়। imported premium fabric এবং 100% combed cotton এ তৈরি কাস্টম প্রিন্টেড টি-শার্টের নির্ভরযোগ্য ঠিকানা।") @db.Text
+  logo         String   @default("")
+  bkashNumber  String   @default("")
+  nagadNumber  String   @default("")
+  rocketNumber String   @default("")
+  pinterest    String   @default("")
+  youtube      String   @default("")
+  tiktok       String   @default("")
+  twitter      String   @default("")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime
+}
+
+model user {
+  id        String    @id
+  name      String
+  email     String    @unique(map: "User_email_key")
+  username  String?   @unique(map: "User_username_key")
+  phone     String?   @unique(map: "User_phone_key")
+  password  String
+  role      user_role @default(user)
+  avatar    String?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime
+  address   address[]
+  event     event[]
+  order     order[]
+  review    review[]
+  visitor   visitor[]
+}
+
+model visitor {
+  id               String   @id
+  sessionId        String   @unique(map: "Visitor_sessionId_key")
+  userId           String?
+  isLoggedIn       Boolean  @default(false)
+  ip               String   @default("")
+  userAgent        String   @default("") @db.Text
+  country          String   @default("Unknown")
+  countryCode      String   @default("")
+  city             String   @default("Unknown")
+  region           String   @default("")
+  timezone         String   @default("")
+  latitude         Float?
+  longitude        Float?
+  browser          String   @default("Unknown")
+  browserVersion   String   @default("")
+  os               String   @default("Unknown")
+  osVersion        String   @default("")
+  device           String   @default("desktop")
+  isMobile         Boolean  @default(false)
+  isBot            Boolean  @default(false)
+  referrer         String   @default("") @db.Text
+  referrerHost     String   @default("")
+  landingPage      String   @default("") @db.Text
+  screenResolution String   @default("")
+  language         String   @default("")
+  pagesViewed      Int      @default(1)
+  eventsCount      Int      @default(0)
+  durationMs       Int      @default(0)
+  lastSeen         DateTime @default(now())
+  isActive         Boolean  @default(true)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime
+  user             user?    @relation(fields: [userId], references: [id], map: "Visitor_userId_fkey")
+
+  @@index([isActive], map: "Visitor_isActive_idx")
+  @@index([lastSeen], map: "Visitor_lastSeen_idx")
+  @@index([sessionId], map: "Visitor_sessionId_idx")
+  @@index([userId], map: "Visitor_userId_fkey")
+}
+
+enum coupon_discountType {
+  percentage
+  fixed
+}
+
+enum user_role {
+  user
+  admin
+}
+
+enum product_status {
+  Live
+  Alert
+  Draft
+}
+
+enum order_paymentMethod {
+  cod
+  bkash
+  nagad
+}
+
+enum order_paymentStatus {
+  pending
+  approved
+  rejected
+}
+
+enum order_status {
+  received
+  confirmed
+  packed
+  shipped
+  delivered
+  cancelled
+  returned
+}
