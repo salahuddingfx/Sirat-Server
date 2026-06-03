@@ -1,5 +1,7 @@
 const PDFDocument = require("pdfkit");
-const { prisma } = require("../config/db.config");
+const { db } = require("../config/db.config");
+const { user, settings } = require("../db/schema");
+const { eq } = require("drizzle-orm");
 const { sendEmail } = require("../utils/mailer");
 
 const money = (value) => `৳${Number(value || 0).toFixed(2)}`;
@@ -22,15 +24,15 @@ const resolveRecipient = async (order) => {
   }
 
   if (order?.userId) {
-    const user = await prisma.user.findUnique({
-      where: { id: order.userId },
-      select: { name: true, email: true, phone: true },
+    const foundUser = await db.query.user.findFirst({
+      where: eq(user.id, order.userId),
+      columns: { name: true, email: true, phone: true },
     });
-    if (user?.email) {
+    if (foundUser?.email) {
       return {
-        name: user.name || "Customer",
-        email: user.email,
-        phone: user.phone || order.guestPhone || "",
+        name: foundUser.name || "Customer",
+        email: foundUser.email,
+        phone: foundUser.phone || order.guestPhone || "",
       };
     }
   }
@@ -47,13 +49,13 @@ const resolveRecipient = async (order) => {
 };
 
 const getAdminEmails = async () => {
-  const admins = await prisma.user.findMany({
-    where: { role: "admin" },
-    select: { email: true },
+  const admins = await db.query.user.findMany({
+    where: eq(user.role, "admin"),
+    columns: { email: true },
   });
-  const settings = await prisma.settings.findFirst();
+  const settingsRecord = await db.query.settings.findFirst();
   const emails = admins.map((a) => a.email);
-  if (settings?.email && !emails.includes(settings.email)) emails.push(settings.email);
+  if (settingsRecord?.email && !emails.includes(settingsRecord.email)) emails.push(settingsRecord.email);
   if (process.env.SMTP_USER && !emails.includes(process.env.SMTP_USER)) emails.push(process.env.SMTP_USER);
   return emails;
 };
