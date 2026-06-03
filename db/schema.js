@@ -1,4 +1,4 @@
-const { mysqlTable, varchar, text, double, int, boolean, mysqlEnum, datetime } = require("drizzle-orm/mysql-core");
+const { mysqlTable, varchar, text, double, int, boolean, mysqlEnum, datetime, primaryKey } = require("drizzle-orm/mysql-core");
 const { relations, sql } = require("drizzle-orm");
 
 // 1. user
@@ -260,6 +260,14 @@ const visitor = mysqlTable("visitor", {
   updatedAt: datetime("updatedAt", { mode: "date" }).default(sql`CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP`).notNull(),
 });
 
+// 18. _flashsaleproducts (many-to-many join table)
+const flashsaleproducts = mysqlTable("_flashsaleproducts", {
+  A: varchar("A", { length: 255 }).notNull().references(() => flashsale.id, { onDelete: "cascade" }),
+  B: varchar("B", { length: 255 }).notNull().references(() => product.id, { onDelete: "cascade" }),
+}, (table) => ({
+  pk: primaryKey({ columns: [table.A, table.B] }),
+}));
+
 // Relationships Definition for Relational Queries API
 const userRelations = relations(user, ({ many }) => ({
   addresses: many(address),
@@ -289,6 +297,7 @@ const productRelations = relations(product, ({ one, many }) => ({
   variants: many(productvariant),
   reviews: many(review),
   orderitem: many(orderitem),
+  flashsaleproducts: many(flashsaleproducts),
 }));
 
 const productimageRelations = relations(productimage, ({ one }) => ({
@@ -349,7 +358,23 @@ const eventRelations = relations(event, ({ one }) => ({
   }),
 }));
 
+const flashsaleRelations = relations(flashsale, ({ many }) => ({
+  flashsaleproducts: many(flashsaleproducts),
+}));
+
+const flashsaleproductsRelations = relations(flashsaleproducts, ({ one }) => ({
+  flashsale: one(flashsale, {
+    fields: [flashsaleproducts.A],
+    references: [flashsale.id],
+  }),
+  product: one(product, {
+    fields: [flashsaleproducts.B],
+    references: [product.id],
+  }),
+}));
+
 module.exports = {
+  flashsaleproducts,
   user,
   address,
   category,
@@ -379,4 +404,6 @@ module.exports = {
   reviewRelations,
   visitorRelations,
   eventRelations,
+  flashsaleRelations,
+  flashsaleproductsRelations,
 };
