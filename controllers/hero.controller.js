@@ -1,5 +1,6 @@
 const heroService = require("../service/hero.service");
 const cache = require("../config/cache.config");
+const { getPublicUrl } = require("../config/multer.config");
 
 const getHeroSlides = async (req, res) => {
   try {
@@ -30,7 +31,7 @@ const adminGetAllSlides = async (req, res) => {
 const adminCreateSlide = async (req, res) => {
   try {
     const data = { ...req.body };
-    if (req.file) data.image = `${req.protocol}://${req.get("host")}/uploads/${req.file.filename}`;
+    if (req.file) data.image = getPublicUrl(req, req.file);
     data.isActive = data.isActive === "true" || data.isActive === true;
     data.order = parseInt(data.order) || 0;
     const slide = await heroService.createSlide(data);
@@ -44,7 +45,7 @@ const adminCreateSlide = async (req, res) => {
 const adminUpdateSlide = async (req, res) => {
   try {
     const data = { ...req.body };
-    if (req.file) data.image = `${req.protocol}://${req.get("host")}/uploads/${req.file.filename}`;
+    if (req.file) data.image = getPublicUrl(req, req.file);
     data.isActive = data.isActive === "true" || data.isActive === true;
     data.order = parseInt(data.order) || 0;
     const slide = await heroService.updateSlide(req.params.id, data);
