@@ -70,7 +70,7 @@ const trackSession = safe(async (req, res) => {
     success: true,
     data: {
       sessionId,
-      visitorId: visitor?._id || null,
+      visitorId: visitor?.id || null,
       country: ctx.country,
       city: ctx.city,
       device: ctx.device,

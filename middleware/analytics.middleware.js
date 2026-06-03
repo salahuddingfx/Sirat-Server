@@ -1,6 +1,6 @@
 const geoip = require("geoip-lite");
 const { UAParser } = require("ua-parser-js");
-const Visitor = require("../models/visitor.model");
+const analyticsService = require("../service/analytics.service");
 
 const DEVICE_THRESHOLDS = {
   mobileUA: /mobile|android|iphone|ipod|blackberry|iemobile|opera mini/i,
@@ -152,7 +152,7 @@ const getOrCreateSessionId = (req, res) => {
         secure: process.env.NODE_ENV === "production",
       });
     } catch {
-      // ignore — cookie parser not registered; client sends X-Session-Id header instead
+      // ignore
     }
   }
 
@@ -163,7 +163,7 @@ const analyticsContext = (req, res, next) => {
   req.analytics = {
     ...extractRequestContext(req),
     sessionId: getOrCreateSessionId(req, res),
-    userId: req.user?.id || req.user?._id || null,
+    userId: req.user?.id || null,
     isLoggedIn: !!req.user,
   };
   next();
@@ -174,54 +174,12 @@ const trackVisitor = async (req) => {
   if (req.analytics.isBot) return null;
 
   const a = req.analytics;
-  const update = {
-    $set: {
-      sessionId: a.sessionId,
-      userId: a.userId,
-      isLoggedIn: a.isLoggedIn,
-      ip: a.ip,
-      userAgent: a.userAgent,
-      country: a.country,
-      countryCode: a.countryCode,
-      city: a.city,
-      region: a.region,
-      timezone: a.timezone,
-      latitude: a.latitude,
-      longitude: a.longitude,
-      browser: a.browser,
-      browserVersion: a.browserVersion,
-      os: a.os,
-      osVersion: a.osVersion,
-      device: a.device,
-      isMobile: a.isMobile,
-      isBot: a.isBot,
-      language: a.language,
-      landingPage: req.originalUrl || req.url || "/",
-      lastSeen: new Date(),
-      isActive: true,
-    },
-    $inc: { pagesViewed: 1 },
-    $setOnInsert: { createdAt: new Date() },
+  const visitorData = {
+    ...a,
+    path: req.originalUrl || req.url || "/",
   };
 
-  if (a.referrer) {
-    update.$set.referrer = a.referrer;
-    update.$set.referrerHost = a.referrerHost;
-  }
-
-  try {
-    const visitor = await Visitor.findOneAndUpdate(
-      { sessionId: a.sessionId },
-      update,
-      { upsert: true, new: true, setDefaultsOnInsert: true }
-    );
-    return visitor;
-  } catch (err) {
-    if (err.code === 11000) {
-      return Visitor.findOne({ sessionId: a.sessionId });
-    }
-    throw err;
-  }
+  return await analyticsService.recordVisitor(visitorData);
 };
 
 module.exports = {
