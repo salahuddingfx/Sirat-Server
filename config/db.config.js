@@ -1,4 +1,4 @@
-const { PrismaClient } = require("@prisma/client");
+const { PrismaClient } = require("../generated/prisma");
 const { PrismaMariaDb } = require("@prisma/adapter-mariadb");
 
 const connectionString = process.env.DATABASE_URL || "mysql://root:@localhost:3306/sirat";
