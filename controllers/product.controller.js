@@ -27,7 +27,7 @@ const createProduct = async (req, res) => {
   try {
     const productData = { ...req.body };
     if (req.files) {
-      productData.images = req.files.map((file) => file.path);
+      productData.images = req.files.map((file) => `${req.protocol}://${req.get("host")}/uploads/${file.filename}`);
     }
     if (typeof productData.variants === "string") {
       productData.variants = JSON.parse(productData.variants);
@@ -55,7 +55,7 @@ const updateProduct = async (req, res) => {
     }
 
     if (req.files && req.files.length > 0) {
-      const newImages = req.files.map((file) => file.path);
+      const newImages = req.files.map((file) => `${req.protocol}://${req.get("host")}/uploads/${file.filename}`);
       productData.images = [...keepImages, ...newImages];
     } else {
       productData.images = keepImages;
