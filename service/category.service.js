@@ -1,34 +1,48 @@
-const { prisma } = require("../config/db.config");
+const { db } = require("../config/db.config");
+const { category } = require("../db/schema");
+const { eq, asc } = require("drizzle-orm");
+const crypto = require("crypto");
 
 const getAllCategories = async () => {
-  return await prisma.category.findMany({
-    orderBy: { name: "asc" },
+  return await db.query.category.findMany({
+    orderBy: [asc(category.name)],
   });
 };
 
 const getCategoryById = async (id) => {
-  return await prisma.category.findUnique({
-    where: { id },
+  return await db.query.category.findFirst({
+    where: eq(category.id, id),
   });
 };
 
 const createCategory = async (categoryData) => {
-  return await prisma.category.create({
-    data: categoryData,
+  const catId = crypto.randomUUID();
+  await db.insert(category).values({
+    id: catId,
+    ...categoryData,
+  });
+  return await db.query.category.findFirst({
+    where: eq(category.id, catId),
   });
 };
 
 const updateCategory = async (id, categoryData) => {
-  return await prisma.category.update({
-    where: { id },
-    data: categoryData,
+  await db.update(category)
+    .set(categoryData)
+    .where(eq(category.id, id));
+  return await db.query.category.findFirst({
+    where: eq(category.id, id),
   });
 };
 
 const deleteCategory = async (id) => {
-  return await prisma.category.delete({
-    where: { id },
+  const deleted = await db.query.category.findFirst({
+    where: eq(category.id, id),
   });
+  if (deleted) {
+    await db.delete(category).where(eq(category.id, id));
+  }
+  return deleted;
 };
 
 module.exports = {

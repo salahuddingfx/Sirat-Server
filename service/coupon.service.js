@@ -1,60 +1,95 @@
-const { prisma } = require("../config/db.config");
+const { db } = require("../config/db.config");
+const { coupon } = require("../db/schema");
+const { eq, and, desc } = require("drizzle-orm");
+const crypto = require("crypto");
 
 const createCoupon = async (couponData) => {
-  return await prisma.coupon.create({
-    data: couponData,
+  const couponId = crypto.randomUUID();
+  // Ensure the code is stored in uppercase
+  const formattedData = {
+    ...couponData,
+    id: couponId,
+  };
+  if (formattedData.code) {
+    formattedData.code = formattedData.code.toUpperCase();
+  }
+  if (formattedData.expiryDate) {
+    formattedData.expiryDate = new Date(formattedData.expiryDate);
+  }
+
+  await db.insert(coupon).values(formattedData);
+  return await db.query.coupon.findFirst({
+    where: eq(coupon.id, couponId),
   });
 };
 
 const getAllCoupons = async () => {
-  return await prisma.coupon.findMany({
-    orderBy: { createdAt: "desc" },
+  return await db.query.coupon.findMany({
+    orderBy: [desc(coupon.createdAt)],
   });
 };
 
 const validateCoupon = async (code, totalAmount) => {
-  const coupon = await prisma.coupon.findFirst({
-    where: { code: code.toUpperCase(), isActive: true },
+  const foundCoupon = await db.query.coupon.findFirst({
+    where: and(
+      eq(coupon.code, code.toUpperCase()),
+      eq(coupon.isActive, true)
+    ),
   });
 
-  if (!coupon) {
+  if (!foundCoupon) {
     throw new Error("Invalid or inactive coupon code.");
   }
 
-  if (coupon.expiryDate && new Date() > coupon.expiryDate) {
+  if (foundCoupon.expiryDate && new Date() > new Date(foundCoupon.expiryDate)) {
     throw new Error("Coupon has expired.");
   }
 
-  if (totalAmount < coupon.minPurchase) {
-    throw new Error(`Minimum purchase of ${coupon.minPurchase} required for this coupon.`);
+  if (totalAmount < foundCoupon.minPurchase) {
+    throw new Error(`Minimum purchase of ${foundCoupon.minPurchase} required for this coupon.`);
   }
 
   let discountAmount = 0;
-  if (coupon.discountType === "percentage") {
-    discountAmount = (totalAmount * coupon.discountValue) / 100;
+  if (foundCoupon.discountType === "percentage") {
+    discountAmount = (totalAmount * foundCoupon.discountValue) / 100;
   } else {
-    discountAmount = coupon.discountValue;
+    discountAmount = foundCoupon.discountValue;
   }
 
   return {
-    code: coupon.code,
-    discountType: coupon.discountType,
-    discountValue: coupon.discountValue,
+    code: foundCoupon.code,
+    discountType: foundCoupon.discountType,
+    discountValue: foundCoupon.discountValue,
     discountAmount,
   };
 };
 
 const updateCoupon = async (id, couponData) => {
-  return await prisma.coupon.update({
-    where: { id },
-    data: couponData,
+  const formattedData = { ...couponData };
+  if (formattedData.code) {
+    formattedData.code = formattedData.code.toUpperCase();
+  }
+  if (formattedData.expiryDate) {
+    formattedData.expiryDate = new Date(formattedData.expiryDate);
+  }
+
+  await db.update(coupon)
+    .set(formattedData)
+    .where(eq(coupon.id, id));
+
+  return await db.query.coupon.findFirst({
+    where: eq(coupon.id, id),
   });
 };
 
 const deleteCoupon = async (id) => {
-  return await prisma.coupon.delete({
-    where: { id },
+  const deleted = await db.query.coupon.findFirst({
+    where: eq(coupon.id, id),
   });
+  if (deleted) {
+    await db.delete(coupon).where(eq(coupon.id, id));
+  }
+  return deleted;
 };
 
 module.exports = {

@@ -1,28 +1,42 @@
-const { prisma } = require("../config/db.config");
+const { db } = require("../config/db.config");
+const { contact } = require("../db/schema");
+const { eq, desc } = require("drizzle-orm");
+const crypto = require("crypto");
 
 const createContact = async (contactData) => {
-  return await prisma.contact.create({
-    data: contactData,
+  const contactId = crypto.randomUUID();
+  await db.insert(contact).values({
+    id: contactId,
+    ...contactData,
+  });
+  return await db.query.contact.findFirst({
+    where: eq(contact.id, contactId),
   });
 };
 
 const getAllContacts = async () => {
-  return await prisma.contact.findMany({
-    orderBy: { createdAt: "desc" },
+  return await db.query.contact.findMany({
+    orderBy: [desc(contact.createdAt)],
   });
 };
 
 const markAsRead = async (id) => {
-  return await prisma.contact.update({
-    where: { id },
-    data: { isRead: true },
+  await db.update(contact)
+    .set({ isRead: true })
+    .where(eq(contact.id, id));
+  return await db.query.contact.findFirst({
+    where: eq(contact.id, id),
   });
 };
 
 const deleteContact = async (id) => {
-  return await prisma.contact.delete({
-    where: { id },
+  const deleted = await db.query.contact.findFirst({
+    where: eq(contact.id, id),
   });
+  if (deleted) {
+    await db.delete(contact).where(eq(contact.id, id));
+  }
+  return deleted;
 };
 
 module.exports = {

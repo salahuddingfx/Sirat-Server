@@ -1,12 +1,15 @@
-const { prisma } = require("../config/db.config");
+const { db } = require("../config/db.config");
+const { user, address } = require("../db/schema");
+const { eq } = require("drizzle-orm");
+const crypto = require("crypto");
 
 const getUserById = async (id) => {
-  const user = await prisma.user.findUnique({
-    where: { id },
-    include: { addresses: true },
+  const foundUser = await db.query.user.findFirst({
+    where: eq(user.id, id),
+    with: { addresses: true },
   });
-  if (user) delete user.password;
-  return user;
+  if (foundUser) delete foundUser.password;
+  return foundUser;
 };
 
 const updateUserProfile = async (id, updateData) => {
@@ -19,29 +22,35 @@ const updateUserProfile = async (id, updateData) => {
     avatar,
   };
 
-  if (addresses && Array.isArray(addresses)) {
-    // Update addresses: Delete all and recreate
-    await prisma.address.deleteMany({ where: { userId: id } });
-    updatePayload.addresses = {
-      create: addresses.map((addr) => ({
-        street: addr.street,
-        city: addr.city,
-        state: addr.state,
-        zipCode: addr.zipCode,
-        country: addr.country || "Bangladesh",
-        isDefault: addr.isDefault || false,
-      })),
-    };
-  }
+  return await db.transaction(async (tx) => {
+    await tx.update(user)
+      .set(updatePayload)
+      .where(eq(user.id, id));
 
-  const user = await prisma.user.update({
-    where: { id },
-    data: updatePayload,
-    include: { addresses: true },
+    if (addresses && Array.isArray(addresses)) {
+      await tx.delete(address).where(eq(address.userId, id));
+      for (const addr of addresses) {
+        await tx.insert(address).values({
+          id: crypto.randomUUID(),
+          street: addr.street,
+          city: addr.city,
+          state: addr.state,
+          zipCode: addr.zipCode,
+          country: addr.country || "Bangladesh",
+          isDefault: addr.isDefault || false,
+          userId: id,
+        });
+      }
+    }
+
+    const updatedUser = await tx.query.user.findFirst({
+      where: eq(user.id, id),
+      with: { addresses: true },
+    });
+
+    if (updatedUser) delete updatedUser.password;
+    return updatedUser;
   });
-
-  delete user.password;
-  return user;
 };
 
 module.exports = { getUserById, updateUserProfile };
