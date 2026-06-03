@@ -30,7 +30,8 @@ connectDB();
 // Security Middleware
 app.use(helmet({
   crossOriginEmbedderPolicy: false,
-  crossOriginResourcePolicy: { policy: "cross-origin" }
+  crossOriginResourcePolicy: { policy: "cross-origin" },
+  contentSecurityPolicy: false,
 })); // Set security HTTP headers
 app.use(xss()); // Prevent XSS attacks
 app.use(hpp()); // Prevent HTTP Parameter Pollution
