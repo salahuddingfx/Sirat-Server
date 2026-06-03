@@ -25,11 +25,7 @@ const env = {
   upload: {
     maxMb: toInt(process.env.UPLOAD_MAX_MB, 5),
   },
-  cloudinary: {
-    cloudName: process.env.CLOUDINARY_CLOUD_NAME,
-    apiKey: process.env.CLOUDINARY_API_KEY,
-    apiSecret: process.env.CLOUDINARY_API_SECRET,
-  },
+
   mail: {
     smtpHost: process.env.SMTP_HOST,
     smtpPort: process.env.SMTP_PORT,

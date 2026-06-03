@@ -25,7 +25,9 @@ process.on("unhandledRejection", (reason) => {
 connectDB();
 
 // Security Middleware
-app.use(helmet()); // Set security HTTP headers
+app.use(helmet({
+  crossOriginResourcePolicy: { policy: "cross-origin" }
+})); // Set security HTTP headers
 app.use(xss()); // Prevent XSS attacks
 app.use(hpp()); // Prevent HTTP Parameter Pollution
 app.use(compression()); // Compress all responses
