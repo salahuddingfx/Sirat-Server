@@ -102,8 +102,24 @@ app.use("/api/newsletter", require("./routes/newsletter.routes"));
 app.use("/api/categories", require("./routes/category.routes"));
 app.use("/api/flash-sale", require("./routes/flashSale.routes"));
 
+// Helper to get the correct path to the client's index.html depending on environment (dev vs production cPanel)
+const getClientIndexPath = () => {
+  const paths = [
+    path.join(__dirname, "../client/dist/index.html"),            // Local dev / monorepo
+    path.join(__dirname, "../sirat.salahuddin.codes/index.html"),   // Production cPanel storefront
+    path.join(__dirname, "client/dist/index.html")              // Nested fallback
+  ];
+  for (const p of paths) {
+    if (fs.existsSync(p)) {
+      return p;
+    }
+  }
+  return null;
+};
+
 // Serve static client build files (JS, CSS, images, etc.)
 app.use(express.static(path.join(__dirname, "../client/dist")));
+app.use(express.static(path.join(__dirname, "../sirat.salahuddin.codes")));
 
 // Intercept product page requests for dynamic SEO tag injection
 app.get("/product/:slug", async (req, res, next) => {
@@ -118,15 +134,20 @@ app.get("/product/:slug", async (req, res, next) => {
       },
     });
 
-    const indexPath = path.join(__dirname, "../client/dist/index.html");
+    const indexPath = getClientIndexPath();
 
     // Read compiled index.html
     let htmlContent;
+    if (!indexPath) {
+      console.warn("Client build index.html is missing.");
+      return res.status(404).send("Storefront build index.html is missing. Please run build and deploy the client storefront.");
+    }
+
     try {
       htmlContent = fs.readFileSync(indexPath, "utf8");
     } catch (readErr) {
-      console.warn("Client build index.html is missing at:", indexPath);
-      return res.status(404).send("Storefront build is missing. Please run 'npm run build' in client directory.");
+      console.warn("Client build index.html failed to read at:", indexPath);
+      return res.status(404).send("Storefront build is missing or unreadable.");
     }
 
     if (!product) {
@@ -204,7 +225,20 @@ app.get("/product/:slug", async (req, res, next) => {
 
 // Wildcard Route for Single-Page Application (SPA) fallback
 app.get("*splat", (req, res) => {
-  res.sendFile(path.join(__dirname, "../client/dist/index.html"));
+  const indexPath = getClientIndexPath();
+  if (indexPath) {
+    res.sendFile(indexPath);
+  } else {
+    // If client build is missing, don't crash with 500 ENOENT. 
+    // Gracefully handle requests to API/root, or return 404 for other paths.
+    if (req.path === "/" || req.path === "/api" || req.path === "/api/") {
+      return res.json({ message: "Welcome to Sirat API" });
+    }
+    res.status(404).json({
+      success: false,
+      message: "Storefront build is missing. Server is online but index.html could not be located.",
+    });
+  }
 });
 
 // Global Error Handler
