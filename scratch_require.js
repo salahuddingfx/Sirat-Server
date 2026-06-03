@@ -1,7 +1,8 @@
-try {
-  console.log("Loading db.config...");
-  require("./config/db.config");
-  console.log("db.config loaded successfully!");
-} catch (err) {
-  console.error("Error loading db.config:", err);
-}
+const { connectDB } = require("./config/db.config");
+connectDB().then(() => {
+  console.log("Database connected successfully in script!");
+  process.exit(0);
+}).catch(err => {
+  console.error("Database connection failed in script:", err);
+  process.exit(1);
+});
