@@ -57,6 +57,9 @@ app.use(cors({
 app.use(express.json({ limit: env.body.jsonLimit }));
 app.use(express.urlencoded({ extended: true, limit: env.body.jsonLimit }));
 
+// Serve static uploads directory
+app.use("/uploads", express.static(path.join(__dirname, "uploads")));
+
 // Public tracking endpoint with its own more-lenient rate limit
 // (each pageview shouldn't compete with auth/data API quota)
 const trackLimiter = rateLimit({
