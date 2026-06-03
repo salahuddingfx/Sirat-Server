@@ -20,7 +20,7 @@ const createCategory = async (req, res) => {
     const featured = req.body.featured === "true" || req.body.featured === true;
     let image = "";
     if (req.file) {
-      image = req.file.path; // Cloudinary URL populated by multer
+      image = `${req.protocol}://${req.get("host")}/uploads/${req.file.filename}`;
     } else {
       return res.status(400).json({ success: false, message: "Category image is required." });
     }
@@ -38,7 +38,7 @@ const updateCategory = async (req, res) => {
     const featured = req.body.featured === "true" || req.body.featured === true;
     const updateData = { name, featured };
     if (req.file) {
-      updateData.image = req.file.path;
+      updateData.image = `${req.protocol}://${req.get("host")}/uploads/${req.file.filename}`;
     }
     const category = await categoryService.updateCategory(req.params.id, updateData);
     if (!category) {
