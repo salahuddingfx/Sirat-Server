@@ -1,25 +1,35 @@
-const { prisma } = require("../config/db.config");
+const { db } = require("../config/db.config");
+const { order, orderitem, productvariant, counter } = require("../db/schema");
+const { eq, and, desc, sql } = require("drizzle-orm");
+const crypto = require("crypto");
 
 /**
  * Helper to generate atomic sequential IDs
  */
-const getNextSequenceValue = async (sequenceName) => {
-  const result = await prisma.counter.upsert({
-    where: { name: sequenceName },
-    update: { count: { increment: 1 } },
-    create: { name: sequenceName, count: 1 },
+const getNextSequenceValue = async (tx, sequenceName) => {
+  await tx.insert(counter)
+    .values({ id: crypto.randomUUID(), name: sequenceName, count: 1 })
+    .onDuplicateKeyUpdate({
+      set: { count: sql`count + 1` }
+    });
+
+  const result = await tx.query.counter.findFirst({
+    where: eq(counter.name, sequenceName),
   });
   return result.count;
 };
 
 const createOrder = async (orderData) => {
   try {
-    return await prisma.$transaction(async (tx) => {
+    return await db.transaction(async (tx) => {
       // 1. Validate & Decrement stock for all items
       for (const item of orderData.items) {
-        const variant = await tx.productVariant.findFirst({
-          where: { productId: item.product, label: item.variant },
-          include: { product: true },
+        const variant = await tx.query.productvariant.findFirst({
+          where: and(
+            eq(productvariant.productId, item.product),
+            eq(productvariant.label, item.variant)
+          ),
+          with: { product: true },
         });
 
         if (!variant) throw new Error(`Variant "${item.variant}" not found.`);
@@ -30,52 +40,58 @@ const createOrder = async (orderData) => {
         }
 
         // Decrement stock
-        await tx.productVariant.update({
-          where: { id: variant.id },
-          data: { stock: { decrement: item.quantity } },
-        });
+        await tx.update(productvariant)
+          .set({ stock: sql`stock - ${item.quantity}` })
+          .where(eq(productvariant.id, variant.id));
       }
 
       // 2. Generate unique sequential order ID
-      const seq = await getNextSequenceValue("orderId");
-      const orderId = `SRT-${1000 + seq}`;
+      const seq = await getNextSequenceValue(tx, "orderId");
+      const orderIdString = `SRT-${1000 + seq}`;
 
       // 3. Create Order
-      const order = await tx.order.create({
-        data: {
-          orderId,
-          user: orderData.user ? { connect: { id: orderData.user } } : undefined,
-          guestName: orderData.guestInfo?.name,
-          guestEmail: orderData.guestInfo?.email,
-          guestPhone: orderData.guestInfo?.phone,
-          guestAddress: orderData.guestInfo?.address,
-          guestCity: orderData.guestInfo?.city,
-          guestZipCode: orderData.guestInfo?.zipCode,
-          shippingCharge: orderData.shippingCharge,
-          totalAmount: orderData.totalAmount,
-          paymentMethod: orderData.paymentMethod,
-          senderNumber: orderData.paymentDetails?.senderNumber,
-          txId: orderData.paymentDetails?.txId,
-          items: {
-            create: orderData.items.map((item) => ({
-              productId: item.product,
-              quantity: item.quantity,
-              variant: item.variant,
-              price: item.price,
-            })),
-          },
-        },
-        include: {
-          items: {
-            include: { product: true },
+      const orderUuid = crypto.randomUUID();
+      await tx.insert(order).values({
+        id: orderUuid,
+        orderId: orderIdString,
+        userId: orderData.user || null,
+        guestName: orderData.guestInfo?.name || null,
+        guestEmail: orderData.guestInfo?.email || null,
+        guestPhone: orderData.guestInfo?.phone || null,
+        guestAddress: orderData.guestInfo?.address || null,
+        guestCity: orderData.guestInfo?.city || null,
+        guestZipCode: orderData.guestInfo?.zipCode || null,
+        shippingCharge: orderData.shippingCharge,
+        totalAmount: orderData.totalAmount,
+        paymentMethod: orderData.paymentMethod,
+        senderNumber: orderData.paymentDetails?.senderNumber || null,
+        txId: orderData.paymentDetails?.txId || null,
+      });
+
+      // 4. Create Order Items
+      for (const item of orderData.items) {
+        await tx.insert(orderitem).values({
+          id: crypto.randomUUID(),
+          productId: item.product,
+          quantity: item.quantity,
+          variant: item.variant,
+          price: item.price,
+          orderId: orderUuid,
+        });
+      }
+
+      // 5. Fetch and return created order with relation mappings
+      return await tx.query.order.findFirst({
+        where: eq(order.id, orderUuid),
+        with: {
+          orderitem: {
+            with: { product: true },
           },
           user: {
-            select: { name: true, email: true, phone: true },
+            columns: { name: true, email: true, phone: true },
           },
         },
       });
-
-      return order;
     });
   } catch (error) {
     throw error;
@@ -83,33 +99,33 @@ const createOrder = async (orderData) => {
 };
 
 const getOrders = async (query = {}) => {
-  let where = {};
-  if (query.user) where.userId = query.user;
-  if (query.status) where.status = query.status;
+  const conditions = [];
+  if (query.user) conditions.push(eq(order.userId, query.user));
+  if (query.status) conditions.push(eq(order.status, query.status));
 
-  return await prisma.order.findMany({
-    where,
-    include: {
-      items: {
-        include: { product: true },
+  return await db.query.order.findMany({
+    where: conditions.length > 0 ? and(...conditions) : undefined,
+    with: {
+      orderitem: {
+        with: { product: true },
       },
       user: {
-        select: { id: true, name: true, email: true, phone: true },
+        columns: { id: true, name: true, email: true, phone: true },
       },
     },
-    orderBy: { createdAt: "desc" },
+    orderBy: [desc(order.createdAt)],
   });
 };
 
 const getOrderById = async (id) => {
-  return await prisma.order.findUnique({
-    where: { id },
-    include: {
-      items: {
-        include: { product: true },
+  return await db.query.order.findFirst({
+    where: eq(order.id, id),
+    with: {
+      orderitem: {
+        with: { product: true },
       },
       user: {
-        select: { id: true, name: true, email: true, phone: true },
+        columns: { id: true, name: true, email: true, phone: true },
       },
     },
   });
@@ -117,46 +133,53 @@ const getOrderById = async (id) => {
 
 const updateOrderStatus = async (id, status) => {
   try {
-    return await prisma.$transaction(async (tx) => {
-      const order = await tx.order.findUnique({
-        where: { id },
-        include: { items: true },
+    return await db.transaction(async (tx) => {
+      const foundOrder = await tx.query.order.findFirst({
+        where: eq(order.id, id),
+        with: { orderitem: true },
       });
-      if (!order) throw new Error("Order not found");
+      if (!foundOrder) throw new Error("Order not found");
 
-      const oldStatus = order.status;
+      const oldStatus = foundOrder.status;
       const cancels = ["cancelled", "returned"];
       const goingToCancel = cancels.includes(status);
       const wasCanceled = cancels.includes(oldStatus);
 
       // Transitioning to cancelled/returned: Restore stock
       if (goingToCancel && !wasCanceled) {
-        for (const item of order.items) {
-          await tx.productVariant.updateMany({
-            where: { productId: item.productId, label: item.variant },
-            data: { stock: { increment: item.quantity } },
-          });
+        for (const item of foundOrder.orderitem) {
+          await tx.update(productvariant)
+            .set({ stock: sql`stock + ${item.quantity}` })
+            .where(and(
+              eq(productvariant.productId, item.productId),
+              eq(productvariant.label, item.variant)
+            ));
         }
       }
       // Transitioning from cancelled/returned back to active: Deduct stock again
       else if (wasCanceled && !goingToCancel) {
-        for (const item of order.items) {
-          const variant = await tx.productVariant.findFirst({
-            where: { productId: item.productId, label: item.variant },
+        for (const item of foundOrder.orderitem) {
+          const variant = await tx.query.productvariant.findFirst({
+            where: and(
+              eq(productvariant.productId, item.productId),
+              eq(productvariant.label, item.variant)
+            ),
           });
           if (!variant || variant.stock < item.quantity) {
             throw new Error(`Cannot restore order. Some items are out of stock.`);
           }
-          await tx.productVariant.update({
-            where: { id: variant.id },
-            data: { stock: { decrement: item.quantity } },
-          });
+          await tx.update(productvariant)
+            .set({ stock: sql`stock - ${item.quantity}` })
+            .where(eq(productvariant.id, variant.id));
         }
       }
 
-      return await tx.order.update({
-        where: { id },
-        data: { status },
+      await tx.update(order)
+        .set({ status })
+        .where(eq(order.id, id));
+
+      return await tx.query.order.findFirst({
+        where: eq(order.id, id),
       });
     });
   } catch (error) {
@@ -166,25 +189,27 @@ const updateOrderStatus = async (id, status) => {
 
 const deleteOrder = async (id) => {
   try {
-    return await prisma.$transaction(async (tx) => {
-      const order = await tx.order.findUnique({
-        where: { id },
-        include: { items: true },
+    return await db.transaction(async (tx) => {
+      const foundOrder = await tx.query.order.findFirst({
+        where: eq(order.id, id),
+        with: { orderitem: true },
       });
-      if (!order) throw new Error("Order not found");
+      if (!foundOrder) throw new Error("Order not found");
 
       // Restore stock for non-cancelled/non-returned orders
       const cancels = ["cancelled", "returned"];
-      if (!cancels.includes(order.status)) {
-        for (const item of order.items) {
-          await tx.productVariant.updateMany({
-            where: { productId: item.productId, label: item.variant },
-            data: { stock: { increment: item.quantity } },
-          });
+      if (!cancels.includes(foundOrder.status)) {
+        for (const item of foundOrder.orderitem) {
+          await tx.update(productvariant)
+            .set({ stock: sql`stock + ${item.quantity}` })
+            .where(and(
+              eq(productvariant.productId, item.productId),
+              eq(productvariant.label, item.variant)
+            ));
         }
       }
 
-      await tx.order.delete({ where: { id } });
+      await tx.delete(order).where(eq(order.id, id));
       return { message: "Order deleted" };
     });
   } catch (error) {
@@ -193,16 +218,17 @@ const deleteOrder = async (id) => {
 };
 
 const updatePaymentStatus = async (id, paymentStatus) => {
-  const order = await prisma.order.update({
-    where: { id },
-    data: { paymentStatus },
+  await db.update(order)
+    .set({ paymentStatus })
+    .where(eq(order.id, id));
+  const updated = await db.query.order.findFirst({
+    where: eq(order.id, id),
   });
-  if (!order) throw new Error("Order not found");
-  return order;
+  if (!updated) throw new Error("Order not found");
+  return updated;
 };
 
 const updateOrderDetails = async (id, updates) => {
-  // Mapping allowed fields
   const data = {};
   if (updates.shippingCharge !== undefined) data.shippingCharge = updates.shippingCharge;
   if (updates.totalAmount !== undefined) data.totalAmount = updates.totalAmount;
@@ -220,12 +246,15 @@ const updateOrderDetails = async (id, updates) => {
     data.txId = updates.paymentDetails.txId;
   }
 
-  const order = await prisma.order.update({
-    where: { id },
-    data,
+  await db.update(order)
+    .set(data)
+    .where(eq(order.id, id));
+
+  const updated = await db.query.order.findFirst({
+    where: eq(order.id, id),
   });
-  if (!order) throw new Error("Order not found");
-  return order;
+  if (!updated) throw new Error("Order not found");
+  return updated;
 };
 
 module.exports = {
