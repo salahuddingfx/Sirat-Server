@@ -1,5 +1,6 @@
 const productService = require("../service/product.service");
 const cache = require("../config/cache.config");
+const { getPublicUrl } = require("../config/multer.config");
 
 const getProducts = async (req, res) => {
   try {
@@ -27,7 +28,7 @@ const createProduct = async (req, res) => {
   try {
     const productData = { ...req.body };
     if (req.files) {
-      productData.images = req.files.map((file) => `${req.protocol}://${req.get("host")}/uploads/${file.filename}`);
+      productData.images = req.files.map((file) => getPublicUrl(req, file));
     }
     if (typeof productData.variants === "string") {
       productData.variants = JSON.parse(productData.variants);
@@ -55,7 +56,7 @@ const updateProduct = async (req, res) => {
     }
 
     if (req.files && req.files.length > 0) {
-      const newImages = req.files.map((file) => `${req.protocol}://${req.get("host")}/uploads/${file.filename}`);
+      const newImages = req.files.map((file) => getPublicUrl(req, file));
       productData.images = [...keepImages, ...newImages];
     } else {
       productData.images = keepImages;
