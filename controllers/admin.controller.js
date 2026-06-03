@@ -1,6 +1,8 @@
 const orderService = require("../service/order.service");
 const productService = require("../service/product.service");
-const { prisma } = require("../config/db.config");
+const { db } = require("../config/db.config");
+const { user } = require("../db/schema");
+const { eq, count, desc } = require("drizzle-orm");
 const { sendStatusUpdateEmail } = require("../service/mail.service");
 const cache = require("../config/cache.config");
 
@@ -11,7 +13,11 @@ const getDashboardStats = async (req, res) => {
       async () => {
         const totalOrders = await orderService.getOrders();
         const totalProducts = await productService.getAllProducts();
-        const totalUsers = await prisma.user.count({ where: { role: "user" } });
+        
+        const [totalUsersRes] = await db.select({ value: count() })
+          .from(user)
+          .where(eq(user.role, "user"));
+        const totalUsers = totalUsersRes.value;
 
         const revenue = totalOrders.reduce((acc, order) => acc + order.totalAmount, 0);
         const lowStock = totalProducts.filter((p) => p.stock < 10).length;
@@ -44,12 +50,12 @@ const getAllOrders = async (req, res) => {
 
 const updateOrderStatus = async (req, res) => {
   try {
-    const order = await orderService.updateOrderStatus(req.params.id, req.body.status);
+    const orderRecord = await orderService.updateOrderStatus(req.params.id, req.body.status);
 
     // Notify customer in background
     (async () => {
       try {
-        await sendStatusUpdateEmail(order);
+        await sendStatusUpdateEmail(orderRecord);
       } catch (err) {
         console.error("Status update email failed:", err);
       }
@@ -57,7 +63,7 @@ const updateOrderStatus = async (req, res) => {
 
     cache.invalidateNamespace("orders");
     cache.invalidateNamespace("dashboard");
-    res.status(200).json({ success: true, data: order });
+    res.status(200).json({ success: true, data: orderRecord });
   } catch (error) {
     res.status(400).json({ success: false, message: error.message });
   }
@@ -65,8 +71,8 @@ const updateOrderStatus = async (req, res) => {
 
 const getAllUsers = async (req, res) => {
   try {
-    const users = await prisma.user.findMany({
-      select: {
+    const users = await db.query.user.findMany({
+      columns: {
         id: true,
         name: true,
         email: true,
@@ -76,7 +82,7 @@ const getAllUsers = async (req, res) => {
         avatar: true,
         createdAt: true,
       },
-      orderBy: { createdAt: "desc" },
+      orderBy: [desc(user.createdAt)],
     });
     res.status(200).json({ success: true, data: users });
   } catch (error) {
@@ -87,12 +93,15 @@ const getAllUsers = async (req, res) => {
 const updateUserRole = async (req, res) => {
   try {
     const { role } = req.body;
-    const user = await prisma.user.update({
-      where: { id: req.params.id },
-      data: { role },
-      select: { id: true, name: true, email: true, role: true },
+    await db.update(user)
+      .set({ role })
+      .where(eq(user.id, req.params.id));
+
+    const updatedUser = await db.query.user.findFirst({
+      where: eq(user.id, req.params.id),
+      columns: { id: true, name: true, email: true, role: true },
     });
-    res.status(200).json({ success: true, data: user });
+    res.status(200).json({ success: true, data: updatedUser });
   } catch (error) {
     res.status(400).json({ success: false, message: error.message });
   }
@@ -100,7 +109,7 @@ const updateUserRole = async (req, res) => {
 
 const deleteUser = async (req, res) => {
   try {
-    await prisma.user.delete({ where: { id: req.params.id } });
+    await db.delete(user).where(eq(user.id, req.params.id));
     res.status(200).json({ success: true, message: "User deleted" });
   } catch (error) {
     res.status(400).json({ success: false, message: error.message });
@@ -127,10 +136,10 @@ const flushCache = async (req, res) => {
 const updatePaymentStatus = async (req, res) => {
   try {
     const { paymentStatus } = req.body;
-    const order = await orderService.updatePaymentStatus(req.params.id, paymentStatus);
+    const orderRecord = await orderService.updatePaymentStatus(req.params.id, paymentStatus);
     cache.invalidateNamespace("orders");
     cache.invalidateNamespace("dashboard");
-    res.status(200).json({ success: true, data: order });
+    res.status(200).json({ success: true, data: orderRecord });
   } catch (error) {
     res.status(400).json({ success: false, message: error.message });
   }
@@ -139,10 +148,10 @@ const updatePaymentStatus = async (req, res) => {
 const updateOrderDetails = async (req, res) => {
   try {
     const updates = req.body;
-    const order = await orderService.updateOrderDetails(req.params.id, updates);
+    const orderRecord = await orderService.updateOrderDetails(req.params.id, updates);
     cache.invalidateNamespace("orders");
     cache.invalidateNamespace("dashboard");
-    res.status(200).json({ success: true, data: order });
+    res.status(200).json({ success: true, data: orderRecord });
   } catch (error) {
     res.status(400).json({ success: false, message: error.message });
   }
@@ -161,9 +170,9 @@ const deleteOrder = async (req, res) => {
 
 const getOrderById = async (req, res) => {
   try {
-    const order = await orderService.getOrderById(req.params.id);
-    if (!order) return res.status(404).json({ success: false, message: "Order not found" });
-    res.status(200).json({ success: true, data: order });
+    const orderRecord = await orderService.getOrderById(req.params.id);
+    if (!orderRecord) return res.status(404).json({ success: false, message: "Order not found" });
+    res.status(200).json({ success: true, data: orderRecord });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
