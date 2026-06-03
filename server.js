@@ -1,13 +1,14 @@
 const env = require("./config/env.config");
 const express = require("express");
 const path = require("path");
+const fs = require("fs");
 const cors = require("cors");
 const helmet = require("helmet");
 const xss = require("./middleware/xss-clean");
 const hpp = require("hpp");
 const rateLimit = require("express-rate-limit");
 const compression = require("compression");
-const { connectDB } = require("./config/db.config");
+const { connectDB, prisma } = require("./config/db.config");
 
 const app = express();
 
@@ -80,8 +81,8 @@ const limiter = rateLimit({
 });
 app.use("/api", limiter);
 
-// Basic Route
-app.get("/", (req, res) => {
+// API Info Route
+app.get("/api", (req, res) => {
   res.json({ message: "Welcome to Sirat API" });
 });
 
@@ -100,6 +101,111 @@ app.use("/api/users", require("./routes/user.routes"));
 app.use("/api/newsletter", require("./routes/newsletter.routes"));
 app.use("/api/categories", require("./routes/category.routes"));
 app.use("/api/flash-sale", require("./routes/flashSale.routes"));
+
+// Serve static client build files (JS, CSS, images, etc.)
+app.use(express.static(path.join(__dirname, "../client/dist")));
+
+// Intercept product page requests for dynamic SEO tag injection
+app.get("/product/:slug", async (req, res, next) => {
+  try {
+    const { slug } = req.params;
+
+    // Fetch product details from the database using Prisma
+    const product = await prisma.product.findUnique({
+      where: { slug },
+      include: {
+        images: true,
+      },
+    });
+
+    const indexPath = path.join(__dirname, "../client/dist/index.html");
+
+    // Read compiled index.html
+    let htmlContent;
+    try {
+      htmlContent = fs.readFileSync(indexPath, "utf8");
+    } catch (readErr) {
+      console.warn("Client build index.html is missing at:", indexPath);
+      return res.status(404).send("Storefront build is missing. Please run 'npm run build' in client directory.");
+    }
+
+    if (!product) {
+      // Product not found, serve default index.html so frontend router handles 404
+      return res.send(htmlContent);
+    }
+
+    // Prepare metadata
+    const productName = product.name;
+    const cleanDescription = product.description
+      ? product.description.replace(/<[^>]*>/g, "").substring(0, 160).trim()
+      : "";
+    const productUrl = `${env.clientUrl}/product/${slug}`;
+
+    // Determine the product image URL (use first image, fallback to sirat.png or sirat.jpg)
+    let imageUrl = `${env.clientUrl}/Sirat.png`;
+    if (product.images && product.images.length > 0) {
+      const firstImage = product.images[0].url;
+      if (firstImage.startsWith("http")) {
+        imageUrl = firstImage;
+      } else {
+        imageUrl = `${env.clientUrl}${firstImage.startsWith("/") ? "" : "/"}${firstImage}`;
+      }
+    }
+
+    // Replaces in HTML content for crawler previews
+    htmlContent = htmlContent
+      .replace(/<title>.*?<\/title>/gi, `<title>${productName} | Sirat</title>`)
+      .replace(
+        /<meta\s+name="description"\s+content="[^"]*"\s*\/?>/gi,
+        `<meta name="description" content="${cleanDescription}" />`
+      )
+      // Open Graph Tags
+      .replace(
+        /<meta\s+property="og:title"\s+content="[^"]*"\s*\/?>/gi,
+        `<meta property="og:title" content="${productName} | Sirat" />`
+      )
+      .replace(
+        /<meta\s+property="og:description"\s+content="[^"]*"\s*\/?>/gi,
+        `<meta property="og:description" content="${cleanDescription}" />`
+      )
+      .replace(
+        /<meta\s+property="og:url"\s+content="[^"]*"\s*\/?>/gi,
+        `<meta property="og:url" content="${productUrl}" />`
+      )
+      .replace(
+        /<meta\s+property="og:image"\s+content="[^"]*"\s*\/?>/gi,
+        `<meta property="og:image" content="${imageUrl}" />`
+      )
+      .replace(
+        /<meta\s+property="og:image:secure_url"\s+content="[^"]*"\s*\/?>/gi,
+        `<meta property="og:image:secure_url" content="${imageUrl}" />`
+      )
+      // Twitter Card Tags
+      .replace(
+        /<meta\s+name="twitter:title"\s+content="[^"]*"\s*\/?>/gi,
+        `<meta name="twitter:title" content="${productName} | Sirat" />`
+      )
+      .replace(
+        /<meta\s+name="twitter:description"\s+content="[^"]*"\s*\/?>/gi,
+        `<meta name="twitter:description" content="${cleanDescription}" />`
+      )
+      .replace(
+        /<meta\s+name="twitter:image"\s+content="[^"]*"\s*\/?>/gi,
+        `<meta name="twitter:image" content="${imageUrl}" />`
+      );
+
+    res.setHeader("Content-Type", "text/html");
+    return res.send(htmlContent);
+  } catch (error) {
+    console.error("Dynamic SEO Tag Injection Error:", error);
+    next(error);
+  }
+});
+
+// Wildcard Route for Single-Page Application (SPA) fallback
+app.get("*splat", (req, res) => {
+  res.sendFile(path.join(__dirname, "../client/dist/index.html"));
+});
 
 // Global Error Handler
 app.use((err, req, res, next) => {
