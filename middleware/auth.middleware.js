@@ -1,5 +1,5 @@
 const jwt = require("jsonwebtoken");
-const User = require("../models/user.model");
+const { prisma } = require("../config/db.config");
 const env = require("../config/env.config");
 
 const protect = async (req, res, next) => {
@@ -9,7 +9,17 @@ const protect = async (req, res, next) => {
     try {
       token = req.headers.authorization.split(" ")[1];
       const decoded = jwt.verify(token, env.jwtSecret);
-      const user = await User.findById(decoded.id).select("-password");
+      
+      const user = await prisma.user.findUnique({
+        where: { id: decoded.id },
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          role: true,
+          avatar: true
+        }
+      });
 
       if (!user) {
         return res.status(401).json({ success: false, message: "User no longer exists" });
