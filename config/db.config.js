@@ -1,8 +1,15 @@
 const { PrismaClient } = require("@prisma/client");
 const { PrismaMariaDb } = require("@prisma/adapter-mariadb");
 
+const connectionString = process.env.DATABASE_URL || "mysql://root:@localhost:3306/sirat";
+const dbUrl = new URL(connectionString);
+
 const adapter = new PrismaMariaDb({
-  connectionString: process.env.DATABASE_URL || "mysql://root:@localhost:3306/sirat"
+  host: dbUrl.hostname,
+  port: dbUrl.port ? parseInt(dbUrl.port) : 3306,
+  user: dbUrl.username,
+  password: dbUrl.password,
+  database: dbUrl.pathname.substring(1),
 });
 
 const prisma = new PrismaClient({ adapter });
