@@ -1,5 +1,6 @@
 const categoryService = require("../service/category.service");
 const cache = require("../config/cache.config");
+const { getPublicUrl } = require("../config/multer.config");
 
 const getCategories = async (req, res) => {
   try {
@@ -20,7 +21,7 @@ const createCategory = async (req, res) => {
     const featured = req.body.featured === "true" || req.body.featured === true;
     let image = "";
     if (req.file) {
-      image = `${req.protocol}://${req.get("host")}/uploads/${req.file.filename}`;
+      image = getPublicUrl(req, req.file);
     } else {
       return res.status(400).json({ success: false, message: "Category image is required." });
     }
@@ -38,7 +39,7 @@ const updateCategory = async (req, res) => {
     const featured = req.body.featured === "true" || req.body.featured === true;
     const updateData = { name, featured };
     if (req.file) {
-      updateData.image = `${req.protocol}://${req.get("host")}/uploads/${req.file.filename}`;
+      updateData.image = getPublicUrl(req, req.file);
     }
     const category = await categoryService.updateCategory(req.params.id, updateData);
     if (!category) {
