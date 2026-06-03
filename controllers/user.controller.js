@@ -1,4 +1,5 @@
 const userService = require("../service/user.service");
+const { getPublicUrl } = require("../config/multer.config");
 
 const getProfile = async (req, res) => {
   try {
@@ -23,7 +24,7 @@ const updateProfile = async (req, res) => {
     };
 
     if (req.file) {
-      updateData.avatar = `${req.protocol}://${req.get("host")}/uploads/${req.file.filename}`;
+      updateData.avatar = getPublicUrl(req, req.file);
     }
 
     if (addresses) {
