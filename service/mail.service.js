@@ -1,6 +1,5 @@
 const PDFDocument = require("pdfkit");
-const Settings = require("../models/settings.model");
-const User = require("../models/user.model");
+const { prisma } = require("../config/db.config");
 const { sendEmail } = require("../utils/mailer");
 
 const money = (value) => `৳${Number(value || 0).toFixed(2)}`;
@@ -18,26 +17,29 @@ const resolveRecipient = async (order) => {
     return {
       name: order.user.name || "Customer",
       email: order.user.email,
-      phone: order.user.phone || order.guestInfo?.phone || ""
+      phone: order.user.phone || order.guestPhone || "",
     };
   }
 
-  if (order?.user && typeof order.user === "string") {
-    const user = await User.findById(order.user).select("name email phone");
+  if (order?.userId) {
+    const user = await prisma.user.findUnique({
+      where: { id: order.userId },
+      select: { name: true, email: true, phone: true },
+    });
     if (user?.email) {
       return {
         name: user.name || "Customer",
         email: user.email,
-        phone: user.phone || order.guestInfo?.phone || ""
+        phone: user.phone || order.guestPhone || "",
       };
     }
   }
 
-  if (order?.guestInfo?.email) {
+  if (order?.guestEmail) {
     return {
-      name: order.guestInfo.name || "Customer",
-      email: order.guestInfo.email,
-      phone: order.guestInfo.phone || ""
+      name: order.guestName || "Customer",
+      email: order.guestEmail,
+      phone: order.guestPhone || "",
     };
   }
 
@@ -45,9 +47,12 @@ const resolveRecipient = async (order) => {
 };
 
 const getAdminEmails = async () => {
-  const admins = await User.find({ role: "admin" }).select("email");
-  const settings = await Settings.findOne();
-  const emails = admins.map(a => a.email);
+  const admins = await prisma.user.findMany({
+    where: { role: "admin" },
+    select: { email: true },
+  });
+  const settings = await prisma.settings.findFirst();
+  const emails = admins.map((a) => a.email);
   if (settings?.email && !emails.includes(settings.email)) emails.push(settings.email);
   if (process.env.SMTP_USER && !emails.includes(process.env.SMTP_USER)) emails.push(process.env.SMTP_USER);
   return emails;
@@ -60,7 +65,7 @@ const getOrderItems = (order) => {
       name: product.name || "Product",
       quantity: item.quantity || 0,
       price: Number(item.price || 0),
-      variant: item.variant || ""
+      variant: item.variant || "",
     };
   });
 };
@@ -92,7 +97,7 @@ const buildInvoiceHtml = (order, recipient) => {
           <div style="margin-bottom:20px;">
             <h2 style="font-size:18px;margin:0 0 8px;">Order Details</h2>
             <p style="margin:0;color:#5a5650;">Payment: ${escapeHtml((order.paymentMethod || "cod").toUpperCase())}</p>
-            ${order.guestInfo?.address ? `<p style="margin:6px 0 0;color:#5a5650;">Shipping: ${escapeHtml([order.guestInfo.address, order.guestInfo.city].filter(Boolean).join(", "))}</p>` : ""}
+            ${order.guestAddress ? `<p style="margin:6px 0 0;color:#5a5650;">Shipping: ${escapeHtml([order.guestAddress, order.guestCity].filter(Boolean).join(", "))}</p>` : ""}
           </div>
 
           <table style="width:100%;border-collapse:collapse;border:1px solid #eee;border-radius:12px;overflow:hidden;">
@@ -132,11 +137,11 @@ const buildAdminAlertHtml = (order, recipient) => {
       <div style="max-width:720px;margin:0 auto;background:#fff;border:1px solid #e9e4d9;border-radius:16px;padding:24px;">
         <h1 style="margin:0 0 12px;font-size:22px;">New Order Received</h1>
         <p style="margin:0 0 8px;">Order ID: <strong>${escapeHtml(order.orderId)}</strong></p>
-        <p style="margin:0 0 8px;">Customer: <strong>${escapeHtml(recipient?.name || order.guestInfo?.name || 'Guest')}</strong></p>
-        <p style="margin:0 0 8px;">Email: <strong>${escapeHtml(recipient?.email || order.guestInfo?.email || 'N/A')}</strong></p>
-        <p style="margin:0 0 8px;">Phone: <strong>${escapeHtml(recipient?.phone || order.guestInfo?.phone || 'N/A')}</strong></p>
+        <p style="margin:0 0 8px;">Customer: <strong>${escapeHtml(recipient?.name || order.guestName || "Guest")}</strong></p>
+        <p style="margin:0 0 8px;">Email: <strong>${escapeHtml(recipient?.email || order.guestEmail || "N/A")}</strong></p>
+        <p style="margin:0 0 8px;">Phone: <strong>${escapeHtml(recipient?.phone || order.guestPhone || "N/A")}</strong></p>
         <p style="margin:0 0 8px;">Total: <strong>${money(order.totalAmount)}</strong></p>
-        <p style="margin:0 0 18px;">Payment: <strong>${escapeHtml((order.paymentMethod || 'cod').toUpperCase())}</strong></p>
+        <p style="margin:0 0 18px;">Payment: <strong>${escapeHtml((order.paymentMethod || "cod").toUpperCase())}</strong></p>
         <h2 style="font-size:18px;margin:0 0 12px;">Items</h2>
         <ul style="margin:0;padding-left:18px;line-height:1.8;">${items}</ul>
       </div>
@@ -144,7 +149,7 @@ const buildAdminAlertHtml = (order, recipient) => {
 };
 
 const buildStatusUpdateHtml = (order, recipient) => {
-    return `
+  return `
       <div style="font-family:Arial,sans-serif;background:#faf9f5;padding:24px;color:#141311;">
         <div style="max-width:720px;margin:0 auto;background:#fff;border:1px solid #e9e4d9;border-radius:16px;overflow:hidden;">
           <div style="background:#c5a059;color:#fff;padding:24px;">
@@ -158,12 +163,12 @@ const buildStatusUpdateHtml = (order, recipient) => {
             <p style="margin:0 0 20px;color:#5a5650;line-height:1.6;">We are working hard to get your premium garments to you as soon as possible. You can track your order live on our website.</p>
   
             <div style="text-align:center;margin-top:32px;">
-              <a href="${process.env.CLIENT_URL || 'http://localhost:5173'}/track?id=${order.orderId}" style="background:#c5a059;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:700;">Track My Order</a>
+              <a href="${process.env.CLIENT_URL || "http://localhost:5173"}/track?id=${order.orderId}" style="background:#c5a059;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:700;">Track My Order</a>
             </div>
           </div>
         </div>
       </div>`;
-}
+};
 
 const buildPdfBuffer = async (order, recipient) => {
   const items = getOrderItems(order);
@@ -198,8 +203,8 @@ const buildPdfBuffer = async (order, recipient) => {
     doc.fontSize(14).fillColor("#141311").text(`Total: ${money(order.totalAmount)}`);
     doc.moveDown();
 
-    if (order.guestInfo?.address || order.guestInfo?.city) {
-      doc.fontSize(11).fillColor("#5a5650").text(`Shipping Address: ${[order.guestInfo.address, order.guestInfo.city].filter(Boolean).join(", ")}`);
+    if (order.guestAddress || order.guestCity) {
+      doc.fontSize(11).fillColor("#5a5650").text(`Shipping Address: ${[order.guestAddress, order.guestCity].filter(Boolean).join(", ")}`);
     }
 
     doc.end();
@@ -213,7 +218,7 @@ const sendOrderEmails = async (order) => {
   const attachment = {
     filename: `invoice-${order.orderId}.pdf`,
     content: pdfBuffer,
-    contentType: "application/pdf"
+    contentType: "application/pdf",
   };
 
   const results = {};
@@ -223,41 +228,43 @@ const sendOrderEmails = async (order) => {
       to: [{ email: recipient.email, name: recipient.name }],
       subject: `Your Sirat order ${order.orderId} invoice`,
       html: buildInvoiceHtml(order, recipient),
-      attachments: [attachment]
+      attachments: [attachment],
     });
   }
 
   if (adminEmails.length > 0) {
-    results.admins = await Promise.all(adminEmails.map(email => 
-      sendEmail({
-        to: [{ email, name: "Sirat Admin" }],
-        subject: `New order alert - ${order.orderId}`,
-        html: buildAdminAlertHtml(order, recipient),
-        replyTo: recipient?.email || undefined,
-        attachments: [attachment]
-      })
-    ));
+    results.admins = await Promise.all(
+      adminEmails.map((email) =>
+        sendEmail({
+          to: [{ email, name: "Sirat Admin" }],
+          subject: `New order alert - ${order.orderId}`,
+          html: buildAdminAlertHtml(order, recipient),
+          replyTo: recipient?.email || undefined,
+          attachments: [attachment],
+        })
+      )
+    );
   }
 
   return results;
 };
 
 const sendStatusUpdateEmail = async (order) => {
-    const recipient = await resolveRecipient(order);
-    if (!recipient?.email) return null;
+  const recipient = await resolveRecipient(order);
+  if (!recipient?.email) return null;
 
-    return await sendEmail({
-        to: [{ email: recipient.email, name: recipient.name }],
-        subject: `Order Update: ${order.orderId} is now ${order.status.toUpperCase()}`,
-        html: buildStatusUpdateHtml(order, recipient)
-    });
-}
+  return await sendEmail({
+    to: [{ email: recipient.email, name: recipient.name }],
+    subject: `Order Update: ${order.orderId} is now ${order.status.toUpperCase()}`,
+    html: buildStatusUpdateHtml(order, recipient),
+  });
+};
 
 const sendNewsletterWelcomeEmail = async (email) => {
-    return await sendEmail({
-        to: [{ email, name: "New Subscriber" }],
-        subject: "Welcome to the SIRAT Elite List!",
-        html: `
+  return await sendEmail({
+    to: [{ email, name: "New Subscriber" }],
+    subject: "Welcome to the SIRAT Elite List!",
+    html: `
             <div style="font-family:Arial,sans-serif;background:#faf9f5;padding:24px;color:#141311;">
                 <div style="max-width:720px;margin:0 auto;background:#fff;border:1px solid #e9e4d9;border-radius:16px;padding:32px;text-align:center;">
                     <h1 style="color:#c5a059;margin:0 0 16px;">Welcome to SIRAT</h1>
@@ -267,19 +274,20 @@ const sendNewsletterWelcomeEmail = async (email) => {
                         <p style="margin:4px 0 0;font-weight:700;">Team SIRAT</p>
                     </div>
                 </div>
-            </div>`
-    });
-}
+            </div>`,
+  });
+};
 
 const sendContactNotification = async (contact) => {
   const adminEmails = await getAdminEmails();
   if (adminEmails.length === 0) return null;
 
-  return await Promise.all(adminEmails.map(email => 
-    sendEmail({
-      to: [{ email, name: "Sirat Admin" }],
-      subject: `New contact form from ${contact.name}`,
-      html: `
+  return await Promise.all(
+    adminEmails.map((email) =>
+      sendEmail({
+        to: [{ email, name: "Sirat Admin" }],
+        subject: `New contact form from ${contact.name}`,
+        html: `
         <div style="font-family:Arial,sans-serif;background:#faf9f5;padding:24px;color:#141311;">
           <div style="max-width:720px;margin:0 auto;background:#fff;border:1px solid #e9e4d9;border-radius:16px;padding:24px;">
             <h1 style="margin:0 0 12px;font-size:22px;">New Contact Message</h1>
@@ -289,9 +297,10 @@ const sendContactNotification = async (contact) => {
             <p style="margin:0;white-space:pre-wrap;line-height:1.7;">${escapeHtml(contact.message)}</p>
           </div>
         </div>`,
-      replyTo: contact.email
-    })
-  ));
+        replyTo: contact.email,
+      })
+    )
+  );
 };
 
 module.exports = {
@@ -301,5 +310,5 @@ module.exports = {
   sendOrderEmails,
   sendStatusUpdateEmail,
   sendNewsletterWelcomeEmail,
-  sendContactNotification
+  sendContactNotification,
 };

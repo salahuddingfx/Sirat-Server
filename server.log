@@ -214,3 +214,5 @@
 [[35m11:24:50 AM[0m] [1mPOST[0m /api/api/track/event - [33m404[0m (4ms)
 [[35m11:24:50 AM[0m] [1mPOST[0m /api/api/track/event - [33m404[0m (5ms)
 [[35m11:24:51 AM[0m] [1mGET[0m /api/reviews/product/6a1d37fdfadc75231e0c3bcb - [36m304[0m (3ms)
+[[35m11:30:58 AM[0m] [1mOPTIONS[0m /api/api/track/event - [32m204[0m (0ms)
+[[35m11:30:58 AM[0m] [1mPOST[0m /api/api/track/event - [33m404[0m (1ms)
