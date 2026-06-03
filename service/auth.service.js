@@ -1,45 +1,70 @@
-const User = require("../models/user.model");
+const { prisma } = require("../config/db.config");
 const jwt = require("jsonwebtoken");
 const env = require("../config/env.config");
+const bcrypt = require("bcryptjs");
 
 const registerUser = async (userData) => {
-  const { email, username, phone } = userData;
+  const { email, username, phone, password, ...rest } = userData;
   
-  const userExists = await User.findOne({ 
-    $or: [
+  const userExists = await prisma.user.findFirst({
+    where: {
+      OR: [
         { email },
-        { username: username || 'null_placeholder' },
-        { phone: phone || 'null_placeholder' }
-    ].filter(query => Object.values(query)[0] !== 'null_placeholder')
+        username ? { username } : undefined,
+        phone ? { phone } : undefined,
+      ].filter(Boolean),
+    },
   });
 
   if (userExists) {
     throw new Error("User with this email, username, or phone already exists.");
   }
 
-  const user = await User.create(userData);
-  const token = jwt.sign({ id: user._id, role: user.role }, env.jwtSecret, {
-    expiresIn: "30d",
+  const hashedPassword = await bcrypt.hash(password, 10);
+
+  const user = await prisma.user.create({
+    data: {
+      ...rest,
+      email,
+      username,
+      phone,
+      password: hashedPassword,
+    },
   });
-  return { user, token };
+
+  const token = jwt.sign({ id: user.id, role: user.role }, env.jwtSecret, {
+    expiresIn: env.jwtExpiresIn,
+  });
+
+  const userToReturn = { ...user };
+  delete userToReturn.password;
+  
+  return { user: userToReturn, token };
 };
 
 const loginUser = async (identifier, password) => {
-  const user = await User.findOne({
-    $or: [
+  const user = await prisma.user.findFirst({
+    where: {
+      OR: [
         { email: identifier },
         { username: identifier },
         { phone: identifier }
-    ]
+      ]
+    }
   });
 
-  if (!user || !(await user.comparePassword(password))) {
+  if (!user || !(await bcrypt.compare(password, user.password))) {
     throw new Error("Invalid credentials");
   }
-  const token = jwt.sign({ id: user._id, role: user.role }, env.jwtSecret, {
-    expiresIn: "30d",
+
+  const token = jwt.sign({ id: user.id, role: user.role }, env.jwtSecret, {
+    expiresIn: env.jwtExpiresIn,
   });
-  return { user, token };
+
+  const userToReturn = { ...user };
+  delete userToReturn.password;
+
+  return { user: userToReturn, token };
 };
 
 module.exports = { registerUser, loginUser };

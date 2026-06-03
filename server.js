@@ -2,12 +2,11 @@ const env = require("./config/env.config");
 const express = require("express");
 const cors = require("cors");
 const helmet = require("helmet");
-const mongoSanitize = require("./middleware/mongo-sanitize");
 const xss = require("./middleware/xss-clean");
 const hpp = require("hpp");
 const rateLimit = require("express-rate-limit");
 const compression = require("compression");
-const connectDB = require("./config/db.config");
+const { connectDB } = require("./config/db.config");
 
 const app = express();
 
@@ -26,7 +25,6 @@ connectDB();
 
 // Security Middleware
 app.use(helmet()); // Set security HTTP headers
-app.use(mongoSanitize()); // Sanitize data against NoSQL injection
 app.use(xss()); // Prevent XSS attacks
 app.use(hpp()); // Prevent HTTP Parameter Pollution
 app.use(compression()); // Compress all responses
