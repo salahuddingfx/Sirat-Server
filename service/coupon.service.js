@@ -1,16 +1,22 @@
-const Coupon = require("../models/coupon.model");
+const { prisma } = require("../config/db.config");
 
 const createCoupon = async (couponData) => {
-  return await Coupon.create(couponData);
+  return await prisma.coupon.create({
+    data: couponData,
+  });
 };
 
 const getAllCoupons = async () => {
-  return await Coupon.find().sort({ createdAt: -1 });
+  return await prisma.coupon.findMany({
+    orderBy: { createdAt: "desc" },
+  });
 };
 
 const validateCoupon = async (code, totalAmount) => {
-  const coupon = await Coupon.findOne({ code, isActive: true });
-  
+  const coupon = await prisma.coupon.findFirst({
+    where: { code: code.toUpperCase(), isActive: true },
+  });
+
   if (!coupon) {
     throw new Error("Invalid or inactive coupon code.");
   }
@@ -34,16 +40,21 @@ const validateCoupon = async (code, totalAmount) => {
     code: coupon.code,
     discountType: coupon.discountType,
     discountValue: coupon.discountValue,
-    discountAmount
+    discountAmount,
   };
 };
 
 const updateCoupon = async (id, couponData) => {
-  return await Coupon.findByIdAndUpdate(id, couponData, { new: true });
+  return await prisma.coupon.update({
+    where: { id },
+    data: couponData,
+  });
 };
 
 const deleteCoupon = async (id) => {
-  return await Coupon.findByIdAndDelete(id);
+  return await prisma.coupon.delete({
+    where: { id },
+  });
 };
 
 module.exports = {
