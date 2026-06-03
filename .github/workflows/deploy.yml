@@ -22,7 +22,7 @@ jobs:
           password: ${{ secrets.FTP_PASSWORD }}
           port: 21
           local-dir: ./
-          server-dir: sirat-server/
+          server-dir: sirat-api.salahuddin.codes/
           dangerous-clean-slate: false
           exclude: |
             **/node_modules/**
