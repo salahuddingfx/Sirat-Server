@@ -1,5 +1,6 @@
 const { prisma } = require("../config/db.config");
 const cache = require("../config/cache.config");
+const { getPublicUrl } = require("../config/multer.config");
 
 const getSettings = async (req, res) => {
   try {
@@ -23,7 +24,7 @@ const updateSettings = async (req, res) => {
     let settings = await prisma.settings.findFirst();
     const updateData = { ...req.body };
     if (req.file) {
-      updateData.logo = `${req.protocol}://${req.get("host")}/uploads/${req.file.filename}`;
+      updateData.logo = getPublicUrl(req, req.file);
     }
 
     if (!settings) {
