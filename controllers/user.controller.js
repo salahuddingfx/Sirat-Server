@@ -23,7 +23,7 @@ const updateProfile = async (req, res) => {
     };
 
     if (req.file) {
-      updateData.avatar = req.file.path; // Cloudinary URL
+      updateData.avatar = `${req.protocol}://${req.get("host")}/uploads/${req.file.filename}`;
     }
 
     if (addresses) {
