@@ -30,7 +30,7 @@ const adminGetAllSlides = async (req, res) => {
 const adminCreateSlide = async (req, res) => {
   try {
     const data = { ...req.body };
-    if (req.file) data.image = req.file.path;
+    if (req.file) data.image = `${req.protocol}://${req.get("host")}/uploads/${req.file.filename}`;
     data.isActive = data.isActive === "true" || data.isActive === true;
     data.order = parseInt(data.order) || 0;
     const slide = await heroService.createSlide(data);
@@ -44,7 +44,7 @@ const adminCreateSlide = async (req, res) => {
 const adminUpdateSlide = async (req, res) => {
   try {
     const data = { ...req.body };
-    if (req.file) data.image = req.file.path;
+    if (req.file) data.image = `${req.protocol}://${req.get("host")}/uploads/${req.file.filename}`;
     data.isActive = data.isActive === "true" || data.isActive === true;
     data.order = parseInt(data.order) || 0;
     const slide = await heroService.updateSlide(req.params.id, data);
