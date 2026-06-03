@@ -23,7 +23,7 @@ const updateSettings = async (req, res) => {
     let settings = await prisma.settings.findFirst();
     const updateData = { ...req.body };
     if (req.file) {
-      updateData.logo = req.file.path; // Cloudinary URL
+      updateData.logo = `${req.protocol}://${req.get("host")}/uploads/${req.file.filename}`;
     }
 
     if (!settings) {
