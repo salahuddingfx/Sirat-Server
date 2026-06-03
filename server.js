@@ -3,6 +3,8 @@ const express = require("express");
 const path = require("path");
 const fs = require("fs");
 const cors = require("cors");
+const { eq } = require("drizzle-orm");
+const { product: productTable } = require("./db/schema");
 const helmet = require("helmet");
 const xss = require("./middleware/xss-clean");
 const hpp = require("hpp");
@@ -126,10 +128,10 @@ app.get("/product/:slug", async (req, res, next) => {
   try {
     const { slug } = req.params;
 
-    // Fetch product details from the database using Prisma
-    const product = await prisma.product.findUnique({
-      where: { slug },
-      include: {
+    // Fetch product details from the database using Drizzle
+    const product = await prisma.query.product.findFirst({
+      where: eq(productTable.slug, slug),
+      with: {
         images: true,
       },
     });
