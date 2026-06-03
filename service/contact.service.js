@@ -1,19 +1,28 @@
-const Contact = require("../models/contact.model");
+const { prisma } = require("../config/db.config");
 
 const createContact = async (contactData) => {
-  return await Contact.create(contactData);
+  return await prisma.contact.create({
+    data: contactData,
+  });
 };
 
 const getAllContacts = async () => {
-  return await Contact.find().sort({ createdAt: -1 });
+  return await prisma.contact.findMany({
+    orderBy: { createdAt: "desc" },
+  });
 };
 
 const markAsRead = async (id) => {
-  return await Contact.findByIdAndUpdate(id, { isRead: true }, { new: true });
+  return await prisma.contact.update({
+    where: { id },
+    data: { isRead: true },
+  });
 };
 
 const deleteContact = async (id) => {
-  return await Contact.findByIdAndDelete(id);
+  return await prisma.contact.delete({
+    where: { id },
+  });
 };
 
 module.exports = {
