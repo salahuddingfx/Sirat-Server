@@ -1,3 +1,4 @@
+const { prisma } = require("../config/db.config");
 const geoip = require("geoip-lite");
 const { UAParser } = require("ua-parser-js");
 const analyticsService = require("../service/analytics.service");
