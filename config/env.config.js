@@ -8,7 +8,7 @@ const toInt = (val, fallback) => {
 const env = {
   nodeEnv: process.env.NODE_ENV || "development",
   port: toInt(process.env.PORT, 5000),
-  mongoUri: process.env.MONGO_URI,
+  databaseUrl: process.env.DATABASE_URL,
   jwtSecret: process.env.JWT_SECRET || "your_default_jwt_secret_here",
   jwtExpiresIn: process.env.JWT_EXPIRES_IN || "30d",
   clientUrl: process.env.CLIENT_URL || "http://localhost:5173",
@@ -42,7 +42,7 @@ const env = {
 };
 
 // Validate that critical env variables are loaded
-const criticalKeys = ["MONGO_URI", "JWT_SECRET"];
+const criticalKeys = ["DATABASE_URL", "JWT_SECRET"];
 criticalKeys.forEach((key) => {
   if (!process.env[key]) {
     console.warn(`\x1b[33m[Warning] Critical environment variable is missing: ${key}\x1b[0m`);
