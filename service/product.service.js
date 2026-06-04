@@ -79,6 +79,7 @@ const populateProducts = async (products, executor = db) => {
 
   return products.map((p) => ({
     ...p,
+    _id: p.id,
     category: categoryMap.get(p.categoryId) || null,
     images: imagesMap.get(p.id) || [],
     variants: variantsMap.get(p.id) || [],
