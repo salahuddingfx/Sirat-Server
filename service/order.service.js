@@ -151,11 +151,39 @@ const createOrder = async (orderData) => {
           .where(eq(productvariant.id, variant.id));
       }
 
-      // 2. Generate unique sequential order ID
+      // 2. Compute subtotal from items
+      const computedSubtotal = orderData.items.reduce(
+        (sum, item) => sum + (item.price || 0) * item.quantity,
+        0
+      );
+
+      // 3. Validate coupon if provided
+      let finalDiscountAmount = 0;
+      let validatedCouponCode = null;
+      if (orderData.couponCode) {
+        try {
+          const couponResult = await couponService.validateCoupon(
+            orderData.couponCode,
+            computedSubtotal
+          );
+          finalDiscountAmount = couponResult.discountAmount;
+          validatedCouponCode = couponResult.code;
+        } catch (err) {
+          throw new Error(`Coupon validation failed: ${err.message}`);
+        }
+      }
+
+      // 4. Verify totalAmount is not lower than expected (no undercharging)
+      const expectedMinTotal = computedSubtotal - finalDiscountAmount + (orderData.shippingCharge || 0);
+      if (orderData.totalAmount < expectedMinTotal - 1) {
+        throw new Error("Total amount mismatch. Please refresh and try again.");
+      }
+
+      // 5. Generate unique sequential order ID
       const seq = await getNextSequenceValue(tx, "orderId");
       const orderIdString = `SRT-${1000 + seq}`;
 
-      // 3. Create Order
+      // 6. Create Order
       const orderUuid = crypto.randomUUID();
       await tx.insert(order).values({
         id: orderUuid,
@@ -169,6 +197,8 @@ const createOrder = async (orderData) => {
         guestZipCode: orderData.guestInfo?.zipCode || null,
         shippingCharge: orderData.shippingCharge,
         totalAmount: orderData.totalAmount,
+        discountAmount: finalDiscountAmount,
+        couponCode: validatedCouponCode,
         paymentMethod: orderData.paymentMethod,
         senderNumber: orderData.paymentDetails?.senderNumber || null,
         txId: orderData.paymentDetails?.txId || null,
