@@ -19,8 +19,8 @@ const updateUserProfile = async (id, updateData) => {
 
   let updatePayload = {
     name,
-    phone,
-    username,
+    phone: phone === "" ? null : phone,
+    username: username === "" ? null : username,
     avatar,
   };
 
