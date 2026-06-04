@@ -64,4 +64,13 @@ router.delete("/users/:id", adminController.deleteUser);
 router.get("/cache/stats", adminController.getCacheStats);
 router.post("/cache/flush", adminController.flushCache);
 
+// Team Member Management
+const teamController = require("../controllers/team.controller");
+const uploadTeam = multer({ storage });
+router.get("/team", teamController.adminGetAllMembers);
+router.get("/team/:id", teamController.adminGetMemberById);
+router.post("/team", uploadTeam.single("avatar"), teamController.adminCreateMember);
+router.put("/team/:id", uploadTeam.single("avatar"), teamController.adminUpdateMember);
+router.delete("/team/:id", teamController.adminDeleteMember);
+
 module.exports = router;
