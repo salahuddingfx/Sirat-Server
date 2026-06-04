@@ -4,6 +4,43 @@ const { eq, and, desc, sum, not, inArray } = require("drizzle-orm");
 const crypto = require("crypto");
 
 /**
+ * Normalizes product data to correct database types (handling empty strings and string-encoded numbers/booleans)
+ */
+const normalizeProductData = (data) => {
+  const normalized = { ...data };
+
+  const toFloat = (val, fallback = null) => {
+    if (val === undefined) return undefined;
+    if (val === null || val === "") return fallback;
+    const parsed = parseFloat(val);
+    return isNaN(parsed) ? fallback : parsed;
+  };
+
+  const toInt = (val, fallback = 0) => {
+    if (val === undefined) return undefined;
+    if (val === null || val === "") return fallback;
+    const parsed = parseInt(val, 10);
+    return isNaN(parsed) ? fallback : parsed;
+  };
+
+  if (data.price !== undefined) normalized.price = toFloat(data.price, 0);
+  if (data.oldPrice !== undefined) normalized.oldPrice = toFloat(data.oldPrice, null);
+  if (data.costPrice !== undefined) normalized.costPrice = toFloat(data.costPrice, 0);
+  if (data.packagingCost !== undefined) normalized.packagingCost = toFloat(data.packagingCost, 0);
+  if (data.managementCost !== undefined) normalized.managementCost = toFloat(data.managementCost, 0);
+  if (data.otherCost !== undefined) normalized.otherCost = toFloat(data.otherCost, 0);
+  if (data.stock !== undefined) normalized.stock = toInt(data.stock, 0);
+  if (data.weight !== undefined) normalized.weight = toFloat(data.weight, 0.35);
+  if (data.rating !== undefined) normalized.rating = toFloat(data.rating, 0);
+
+  if (data.featured !== undefined) {
+    normalized.featured = data.featured === "true" || data.featured === true;
+  }
+
+  return normalized;
+};
+
+/**
  * Helper to populate category, images, and variants for a list of products
  */
 const populateProducts = async (products, executor = db) => {
@@ -99,7 +136,8 @@ const getProductById = async (idOrSlug) => {
 };
 
 const createProduct = async (productData) => {
-  const { images, variants, category: categoryName, categoryId: providedCategoryId, ...rest } = productData;
+  const normalized = normalizeProductData(productData);
+  const { images, variants, category: categoryName, categoryId: providedCategoryId, ...rest } = normalized;
 
   return await db.transaction(async (tx) => {
     let categoryId = providedCategoryId;
@@ -116,6 +154,10 @@ const createProduct = async (productData) => {
         });
         categoryId = newCatId;
       }
+    }
+
+    if (!categoryId) {
+      throw new Error("Category is required.");
     }
 
     if (!rest.slug && rest.name) {
@@ -170,7 +212,8 @@ const createProduct = async (productData) => {
 };
 
 const updateProduct = async (id, productData) => {
-  const { images, variants, category: categoryName, categoryId: providedCategoryId, ...rest } = productData;
+  const normalized = normalizeProductData(productData);
+  const { images, variants, category: categoryName, categoryId: providedCategoryId, ...rest } = normalized;
 
   return await db.transaction(async (tx) => {
     let categoryId = providedCategoryId;
@@ -182,9 +225,18 @@ const updateProduct = async (id, productData) => {
     const updatePayload = { ...rest };
     if (categoryId) updatePayload.categoryId = categoryId;
 
-    await tx.update(product)
-      .set(updatePayload)
-      .where(eq(product.id, id));
+    // Filter out undefined values to avoid overwriting with null
+    Object.keys(updatePayload).forEach((key) => {
+      if (updatePayload[key] === undefined) {
+        delete updatePayload[key];
+      }
+    });
+
+    if (Object.keys(updatePayload).length > 0) {
+      await tx.update(product)
+        .set(updatePayload)
+        .where(eq(product.id, id));
+    }
 
     if (images) {
       await tx.delete(productimage).where(eq(productimage.productId, id));
