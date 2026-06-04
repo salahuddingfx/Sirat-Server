@@ -68,7 +68,17 @@ const coupon = mysqlTable("coupon", {
   updatedAt: datetime("updatedAt", { mode: "date" }).default(sql`CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP`).notNull(),
 });
 
-// 7. event
+// 7. passwordresettoken
+const passwordresettoken = mysqlTable("passwordresettoken", {
+  id: varchar("id", { length: 255 }).primaryKey(),
+  email: varchar("email", { length: 255 }).notNull(),
+  otp: varchar("otp", { length: 6 }).notNull(),
+  expiresAt: datetime("expiresAt", { mode: "date" }).notNull(),
+  used: boolean("used").default(false).notNull(),
+  createdAt: datetime("createdAt", { mode: "date" }).default(sql`CURRENT_TIMESTAMP`).notNull(),
+});
+
+// 8. event
 const event = mysqlTable("event", {
   id: varchar("id", { length: 255 }).primaryKey(),
   type: varchar("type", { length: 255 }).notNull(),
@@ -388,6 +398,7 @@ module.exports = {
   heroslide,
   order,
   orderitem,
+  passwordresettoken,
   product,
   productimage,
   productvariant,
