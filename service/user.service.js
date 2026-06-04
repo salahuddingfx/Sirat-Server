@@ -2,6 +2,7 @@ const { db } = require("../config/db.config");
 const { user, address } = require("../db/schema");
 const { eq } = require("drizzle-orm");
 const crypto = require("crypto");
+const bcrypt = require("bcryptjs");
 
 const getUserById = async (id) => {
   const [foundUser] = await db.select().from(user).where(eq(user.id, id)).limit(1);
@@ -56,4 +57,17 @@ const updateUserProfile = async (id, updateData) => {
   });
 };
 
-module.exports = { getUserById, updateUserProfile };
+const changePassword = async (userId, currentPassword, newPassword) => {
+  const [foundUser] = await db.select().from(user).where(eq(user.id, userId)).limit(1);
+  if (!foundUser) throw new Error("User not found");
+
+  const isMatch = await bcrypt.compare(currentPassword, foundUser.password);
+  if (!isMatch) throw new Error("Current password is incorrect");
+
+  const hashedPassword = await bcrypt.hash(newPassword, 10);
+  await db.update(user).set({ password: hashedPassword }).where(eq(user.id, userId));
+
+  return { message: "Password updated successfully" };
+};
+
+module.exports = { getUserById, updateUserProfile, changePassword };
