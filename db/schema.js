@@ -437,6 +437,7 @@ module.exports = {
   event,
   flashsale,
   heroslide,
+  teammember,
   wishlist,
   order,
   orderitem,
