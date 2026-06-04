@@ -78,6 +78,19 @@ const passwordresettoken = mysqlTable("passwordresettoken", {
   createdAt: datetime("createdAt", { mode: "date" }).default(sql`CURRENT_TIMESTAMP`).notNull(),
 });
 
+// 7.5 wishlist
+const wishlist = mysqlTable("wishlist", {
+  id: varchar("id", { length: 255 }).primaryKey(),
+  userId: varchar("userId", { length: 255 }).notNull(),
+  productId: varchar("productId", { length: 255 }).notNull(),
+  createdAt: datetime("createdAt", { mode: "date" }).default(sql`CURRENT_TIMESTAMP`).notNull(),
+});
+
+const wishlistRelations = relations(wishlist, ({ one }) => ({
+  user: one(user, { fields: [wishlist.userId], references: [user.id] }),
+  product: one(product, { fields: [wishlist.productId], references: [product.id] }),
+}));
+
 // 8. event
 const event = mysqlTable("event", {
   id: varchar("id", { length: 255 }).primaryKey(),
@@ -396,6 +409,7 @@ module.exports = {
   event,
   flashsale,
   heroslide,
+  wishlist,
   order,
   orderitem,
   passwordresettoken,
