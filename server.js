@@ -64,6 +64,39 @@ app.use(cors({
 app.use(express.json({ limit: env.body.jsonLimit }));
 app.use(express.urlencoded({ extended: true, limit: env.body.jsonLimit }));
 
+// Compatibility middleware: maps "id" to "_id" recursively in JSON responses for client/admin compatibility
+const mapIdToUnderscoreId = (obj) => {
+  if (obj === null || obj === undefined) return obj;
+  if (Array.isArray(obj)) {
+    return obj.map(mapIdToUnderscoreId);
+  }
+  if (typeof obj === "object") {
+    if (obj instanceof Date || Buffer.isBuffer(obj)) return obj;
+    const newObj = {};
+    for (const key in obj) {
+      if (Object.prototype.hasOwnProperty.call(obj, key)) {
+        newObj[key] = mapIdToUnderscoreId(obj[key]);
+      }
+    }
+    if ("id" in obj && !("_id" in obj)) {
+      newObj._id = obj.id;
+    }
+    return newObj;
+  }
+  return obj;
+};
+
+app.use((req, res, next) => {
+  const originalJson = res.json;
+  res.json = function (body) {
+    if (body && typeof body === "object") {
+      body = mapIdToUnderscoreId(body);
+    }
+    return originalJson.call(this, body);
+  };
+  next();
+});
+
 // Serve static uploads directory
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 

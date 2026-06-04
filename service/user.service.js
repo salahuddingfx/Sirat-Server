@@ -17,17 +17,18 @@ const getUserById = async (id) => {
 const updateUserProfile = async (id, updateData) => {
   const { name, phone, username, avatar, addresses } = updateData;
 
-  let updatePayload = {
-    name,
-    phone: phone === "" ? null : phone,
-    username: username === "" ? null : username,
-    avatar,
-  };
+  let updatePayload = {};
+  if (name !== undefined) updatePayload.name = name;
+  if (phone !== undefined) updatePayload.phone = phone === "" ? null : phone;
+  if (username !== undefined) updatePayload.username = username === "" ? null : username;
+  if (avatar !== undefined) updatePayload.avatar = avatar;
 
   return await db.transaction(async (tx) => {
-    await tx.update(user)
-      .set(updatePayload)
-      .where(eq(user.id, id));
+    if (Object.keys(updatePayload).length > 0) {
+      await tx.update(user)
+        .set(updatePayload)
+        .where(eq(user.id, id));
+    }
 
     if (addresses && Array.isArray(addresses)) {
       await tx.delete(address).where(eq(address.userId, id));

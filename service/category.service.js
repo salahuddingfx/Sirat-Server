@@ -4,15 +4,12 @@ const { eq, asc } = require("drizzle-orm");
 const crypto = require("crypto");
 
 const getAllCategories = async () => {
-  return await db.query.category.findMany({
-    orderBy: [asc(category.name)],
-  });
+  return await db.select().from(category).orderBy(asc(category.name));
 };
 
 const getCategoryById = async (id) => {
-  return await db.query.category.findFirst({
-    where: eq(category.id, id),
-  });
+  const [cat] = await db.select().from(category).where(eq(category.id, id)).limit(1);
+  return cat || null;
 };
 
 const createCategory = async (categoryData) => {
@@ -21,24 +18,18 @@ const createCategory = async (categoryData) => {
     id: catId,
     ...categoryData,
   });
-  return await db.query.category.findFirst({
-    where: eq(category.id, catId),
-  });
+  return await getCategoryById(catId);
 };
 
 const updateCategory = async (id, categoryData) => {
   await db.update(category)
     .set(categoryData)
     .where(eq(category.id, id));
-  return await db.query.category.findFirst({
-    where: eq(category.id, id),
-  });
+  return await getCategoryById(id);
 };
 
 const deleteCategory = async (id) => {
-  const deleted = await db.query.category.findFirst({
-    where: eq(category.id, id),
-  });
+  const deleted = await getCategoryById(id);
   if (deleted) {
     await db.delete(category).where(eq(category.id, id));
   }
