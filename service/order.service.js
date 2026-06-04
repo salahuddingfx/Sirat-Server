@@ -268,7 +268,9 @@ const updateOrderStatus = async (id, status) => {
         .where(eq(order.id, id));
 
       const [updated] = await tx.select().from(order).where(eq(order.id, id)).limit(1);
-      return updated;
+      if (!updated) return null;
+      const [populated] = await populateOrders([updated], tx);
+      return populated;
     });
   } catch (error) {
     throw error;
@@ -311,7 +313,8 @@ const updatePaymentStatus = async (id, paymentStatus) => {
     .where(eq(order.id, id));
   const [updated] = await db.select().from(order).where(eq(order.id, id)).limit(1);
   if (!updated) throw new Error("Order not found");
-  return updated;
+  const [populated] = await populateOrders([updated]);
+  return populated;
 };
 
 const updateOrderDetails = async (id, updates) => {
@@ -338,7 +341,8 @@ const updateOrderDetails = async (id, updates) => {
 
   const [updated] = await db.select().from(order).where(eq(order.id, id)).limit(1);
   if (!updated) throw new Error("Order not found");
-  return updated;
+  const [populated] = await populateOrders([updated]);
+  return populated;
 };
 
 module.exports = {
