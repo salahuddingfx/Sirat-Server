@@ -131,6 +131,8 @@ const order = mysqlTable("order", {
   guestZipCode: varchar("guestZipCode", { length: 255 }),
   shippingCharge: double("shippingCharge").notNull(),
   totalAmount: double("totalAmount").notNull(),
+  discountAmount: double("discountAmount").default(0),
+  couponCode: varchar("couponCode", { length: 255 }),
   paymentMethod: mysqlEnum("paymentMethod", ["cod", "bkash", "nagad"]).default("cod").notNull(),
   senderNumber: varchar("senderNumber", { length: 255 }),
   txId: varchar("txId", { length: 255 }),
