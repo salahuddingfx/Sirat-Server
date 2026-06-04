@@ -28,6 +28,8 @@ const VALID_EVENT_TYPES = new Set([
   "outbound_click",
   "scroll_milestone",
   "error",
+  "apply_promo",
+  "clear_cart",
 ]);
 
 const VALID_CATEGORIES = new Set([
