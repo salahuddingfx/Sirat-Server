@@ -24,9 +24,6 @@ process.on("unhandledRejection", (reason) => {
   console.error("[Unhandled Rejection]", reason);
 });
 
-// Connect to Database
-connectDB();
-
 // Security Middleware
 app.use(helmet({
   crossOriginEmbedderPolicy: false,
@@ -318,10 +315,13 @@ app.listen(PORT, () => {
     if (idx < lines.length) {
       console.log(lines[idx]);
       idx++;
-      setTimeout(showLine, 40); // 40ms per line animation
+      setTimeout(showLine, 40);
     }
   }
   showLine();
+
+  // Connect to database after banner
+  setTimeout(() => connectDB(), 50);
 });
 
 module.exports = app;
