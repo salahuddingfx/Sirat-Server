@@ -187,8 +187,8 @@ const createProduct = async (productData) => {
       ? variants.map((v) => ({
           id: crypto.randomUUID(),
           label: v.label,
-          priceDelta: v.priceDelta || 0,
-          stock: v.stock || 0,
+          priceDelta: parseFloat(v.priceDelta) || 0,
+          stock: parseInt(v.stock, 10) || 0,
           productId,
         }))
       : [{
@@ -255,8 +255,8 @@ const updateProduct = async (id, productData) => {
         await tx.insert(productvariant).values({
           id: crypto.randomUUID(),
           label: v.label,
-          priceDelta: v.priceDelta || 0,
-          stock: v.stock || 0,
+          priceDelta: parseFloat(v.priceDelta) || 0,
+          stock: parseInt(v.stock, 10) || 0,
           productId: id,
         });
       }
