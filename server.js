@@ -316,12 +316,12 @@ app.listen(PORT, () => {
       console.log(lines[idx]);
       idx++;
       setTimeout(showLine, 40);
+    } else {
+      // Banner done — now connect to database
+      setTimeout(connectDB, 10);
     }
   }
   showLine();
-
-  // Connect to database after banner
-  setTimeout(() => connectDB(), 50);
 });
 
 module.exports = app;
