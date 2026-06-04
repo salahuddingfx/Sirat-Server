@@ -433,4 +433,5 @@ module.exports = {
   eventRelations,
   flashsaleRelations,
   flashsaleproductsRelations,
+  wishlistRelations,
 };
