@@ -78,6 +78,14 @@ const passwordresettoken = mysqlTable("passwordresettoken", {
   createdAt: datetime("createdAt", { mode: "date" }).default(sql`CURRENT_TIMESTAMP`).notNull(),
 });
 
+// 7.4 cart
+const cart = mysqlTable("cart", {
+  id: varchar("id", { length: 255 }).primaryKey(),
+  userId: varchar("userId", { length: 255 }).notNull().unique(),
+  items: text("items"),
+  updatedAt: datetime("updatedAt", { mode: "date" }).default(sql`CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP`).notNull(),
+});
+
 // 7.5 wishlist
 const wishlist = mysqlTable("wishlist", {
   id: varchar("id", { length: 255 }).primaryKey(),
@@ -402,6 +410,7 @@ module.exports = {
   flashsaleproducts,
   user,
   address,
+  cart,
   category,
   contact,
   counter,
