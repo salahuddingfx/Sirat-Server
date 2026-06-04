@@ -107,12 +107,28 @@ const trackLimiter = rateLimit({
 });
 app.use("/api/track", trackLimiter, require("./routes/track.routes"));
 
+// Admin endpoints get a much higher (or effectively uncapped) rate limit
+// because they require a valid JWT — abusive callers are blocked at the
+// auth middleware, not the rate limiter. This stops the admin panel from
+// hitting 429s during normal use (StrictMode double-mount, list/refetch, etc.).
+const adminLimiter = rateLimit({
+  windowMs: env.rateLimit.windowMs,
+  max: env.rateLimit.adminMax,
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
 // Rate limiting for all other API routes
 const limiter = rateLimit({
   windowMs: env.rateLimit.windowMs,
   max: env.rateLimit.max,
+  standardHeaders: true,
+  legacyHeaders: false,
 });
-app.use("/api", limiter);
+app.use("/api", (req, res, next) => {
+  if (req.path.startsWith("/admin")) return adminLimiter(req, res, next);
+  return limiter(req, res, next);
+});
 
 // API Info Route
 app.get("/api", (req, res) => {
@@ -307,7 +323,7 @@ app.listen(PORT, () => {
   \x1b[1;34m» STATUS:\x1b[0m    \x1b[1;34mOnline & Listening\x1b[0m
   \x1b[1;36m» CACHE:\x1b[0m     \x1b[1mIn-memory cache enabled (ETag active)\x1b[0m
   \x1b[1;35m» CORS:\x1b[0m      \x1b[1m${env.corsOrigins.join(", ")}\x1b[0m
-  \x1b[1;33m» RATE LIMIT:\x1b[0m \x1b[1m${env.rateLimit.max} req / ${Math.round(env.rateLimit.windowMs / 1000)}s\x1b[0m
+  \x1b[1;33m» RATE LIMIT:\x1b[0m \x1b[1m${env.rateLimit.max} req / ${Math.round(env.rateLimit.windowMs / 1000)}s (admin: ${env.rateLimit.adminMax})\x1b[0m
   `;
   
   const lines = banner.split("\n");
