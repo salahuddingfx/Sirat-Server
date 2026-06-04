@@ -293,6 +293,25 @@ const visitor = mysqlTable("visitor", {
   updatedAt: datetime("updatedAt", { mode: "date" }).default(sql`CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP`).notNull(),
 });
 
+// 19. teammember
+const teammember = mysqlTable("teammember", {
+  id: varchar("id", { length: 255 }).primaryKey(),
+  name: varchar("name", { length: 255 }).notNull(),
+  role: varchar("role", { length: 255 }).notNull(),
+  bio: text("bio"),
+  avatar: varchar("avatar", { length: 255 }),
+  twitter: varchar("twitter", { length: 255 }).default("").notNull(),
+  linkedin: varchar("linkedin", { length: 255 }).default("").notNull(),
+  github: varchar("github", { length: 255 }).default("").notNull(),
+  instagram: varchar("instagram", { length: 255 }).default("").notNull(),
+  facebook: varchar("facebook", { length: 255 }).default("").notNull(),
+  website: varchar("website", { length: 255 }).default("").notNull(),
+  order: int("order").default(0).notNull(),
+  isActive: boolean("isActive").default(true).notNull(),
+  createdAt: datetime("createdAt", { mode: "date" }).default(sql`CURRENT_TIMESTAMP`).notNull(),
+  updatedAt: datetime("updatedAt", { mode: "date" }).default(sql`CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP`).notNull(),
+});
+
 // 18. _flashsaleproducts (many-to-many join table)
 const flashsaleproducts = mysqlTable("_flashsaleproducts", {
   A: varchar("A", { length: 255 }).notNull().references(() => flashsale.id, { onDelete: "cascade" }),
