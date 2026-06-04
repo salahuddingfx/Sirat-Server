@@ -206,7 +206,7 @@ const createOrder = async (orderData) => {
         txId: orderData.paymentDetails?.txId || null,
       });
 
-      // 4. Create Order Items
+      // 7. Create Order Items
       for (const item of orderData.items) {
         await tx.insert(orderitem).values({
           id: crypto.randomUUID(),
@@ -218,7 +218,7 @@ const createOrder = async (orderData) => {
         });
       }
 
-      // 5. Fetch and return created order with relation mappings
+      // 8. Fetch and return created order with relation mappings
       const [newOrder] = await tx.select().from(order).where(eq(order.id, orderUuid)).limit(1);
       if (!newOrder) return null;
 
