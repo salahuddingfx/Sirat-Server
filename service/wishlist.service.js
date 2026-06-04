@@ -26,7 +26,7 @@ const getWishlist = async (userId) => {
     wishlistId: w.id,
     product: {
       ...productMap.get(w.productId),
-      images: imageMap.get(w.productId) || [],
+      images: (imageMap.get(w.productId) || []).map(img => img.url),
     },
     addedAt: w.createdAt,
   }));
