@@ -138,6 +138,7 @@ app.use("/api/newsletter", require("./routes/newsletter.routes"));
 app.use("/api/categories", require("./routes/category.routes"));
 app.use("/api/flash-sale", require("./routes/flashSale.routes"));
 app.use("/api/password", require("./routes/password.routes"));
+app.use("/api/wishlist", require("./routes/wishlist.routes"));
 
 // Helper to get the correct path to the client's index.html depending on environment (dev vs production cPanel)
 const getClientIndexPath = () => {
