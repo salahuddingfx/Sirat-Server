@@ -1,5 +1,5 @@
 const { db } = require("../config/db.config");
-const { order, orderitem, productvariant, counter, user, product } = require("../db/schema");
+const { order, orderitem, productvariant, counter, user, product, productimage } = require("../db/schema");
 const { eq, and, desc, sql, inArray } = require("drizzle-orm");
 const crypto = require("crypto");
 
@@ -22,7 +22,10 @@ const getNextSequenceValue = async (tx, sequenceName) => {
 };
 
 /**
- * Helper to populate orderitems, their products, and users for a list of orders
+ * Helper to populate orderitems, their products (with images), and users for a list of orders.
+ * Transforms flat DB columns into the nested shape the frontend expects:
+ *   _id, guestInfo { name, email, phone, address, city, zipCode },
+ *   paymentDetails { senderNumber, txId }, items[] with product.images[]
  */
 const populateOrders = async (orders, executor = db) => {
   if (orders.length === 0) return [];
@@ -40,11 +43,27 @@ const populateOrders = async (orders, executor = db) => {
     : [];
   const productMap = new Map(products.map((p) => [p.id, p]));
 
-  // Attach product to each item
-  const populatedItems = items.map((item) => ({
-    ...item,
-    product: productMap.get(item.productId) || null,
-  }));
+  // Fetch product images for all products referenced in items
+  const productImages = productIds.length > 0
+    ? await executor.select().from(productimage).where(inArray(productimage.productId, productIds))
+    : [];
+  const productImagesMap = new Map();
+  productImages.forEach((img) => {
+    if (!productImagesMap.has(img.productId)) productImagesMap.set(img.productId, []);
+    productImagesMap.get(img.productId).push(img);
+  });
+
+  // Attach product (with images) to each item
+  const populatedItems = items.map((item) => {
+    const prod = productMap.get(item.productId) || null;
+    return {
+      ...item,
+      product: prod ? {
+        ...prod,
+        images: productImagesMap.get(prod.id) || [],
+      } : null,
+    };
+  });
 
   // Fetch users for these orders
   const userIds = [...new Set(orders.map((o) => o.userId).filter(Boolean))];
@@ -60,9 +79,34 @@ const populateOrders = async (orders, executor = db) => {
     itemsMap.get(item.orderId).push(item);
   });
 
+  // Transform flat DB columns into the nested shape the frontend expects
   return orders.map((o) => ({
-    ...o,
-    orderitem: itemsMap.get(o.id) || [],
+    _id: o.id,
+    id: o.id,
+    orderId: o.orderId,
+    status: o.status,
+    paymentMethod: o.paymentMethod,
+    paymentStatus: o.paymentStatus,
+    shippingCharge: o.shippingCharge,
+    totalAmount: o.totalAmount,
+    createdAt: o.createdAt,
+    updatedAt: o.updatedAt,
+    // Nested guestInfo from flat columns
+    guestInfo: {
+      name: o.guestName || "",
+      email: o.guestEmail || "",
+      phone: o.guestPhone || "",
+      address: o.guestAddress || "",
+      city: o.guestCity || "",
+      zipCode: o.guestZipCode || "",
+    },
+    // Nested paymentDetails from flat columns
+    paymentDetails: {
+      senderNumber: o.senderNumber || "",
+      txId: o.txId || "",
+    },
+    // Rename orderitem → items
+    items: itemsMap.get(o.id) || [],
     user: o.userId ? userMap.get(o.userId) || null : null,
   }));
 };
