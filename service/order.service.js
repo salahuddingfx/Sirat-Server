@@ -90,6 +90,8 @@ const populateOrders = async (orders, executor = db) => {
     paymentStatus: o.paymentStatus,
     shippingCharge: o.shippingCharge,
     totalAmount: o.totalAmount,
+    discountAmount: o.discountAmount || 0,
+    couponCode: o.couponCode || null,
     createdAt: o.createdAt,
     updatedAt: o.updatedAt,
     // Nested guestInfo from flat columns
@@ -352,6 +354,8 @@ const updateOrderDetails = async (id, updates) => {
   const data = {};
   if (updates.shippingCharge !== undefined) data.shippingCharge = updates.shippingCharge;
   if (updates.totalAmount !== undefined) data.totalAmount = updates.totalAmount;
+  if (updates.discountAmount !== undefined) data.discountAmount = updates.discountAmount;
+  if (updates.couponCode !== undefined) data.couponCode = updates.couponCode;
   if (updates.paymentMethod !== undefined) data.paymentMethod = updates.paymentMethod;
   if (updates.guestInfo) {
     data.guestName = updates.guestInfo.name;
