@@ -1,0 +1,8 @@
+{
+  "dialect": "mysql",
+  "schema": "./db/schema.js",
+  "out": "./drizzle",
+  "dbCredentials": {
+    "url": "mysql://root:@localhost:3306/sirat"
+  }
+}
