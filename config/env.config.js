@@ -22,7 +22,8 @@ const env = {
   ],
   rateLimit: {
     windowMs: toInt(process.env.RATE_LIMIT_WINDOW_MS, 10 * 60 * 1000),
-    max: toInt(process.env.RATE_LIMIT_MAX, 100),
+    max: toInt(process.env.RATE_LIMIT_MAX, 2000),
+    adminMax: toInt(process.env.RATE_LIMIT_ADMIN_MAX, 10000),
   },
   body: {
     jsonLimit: process.env.BODY_JSON_LIMIT || "10kb",
