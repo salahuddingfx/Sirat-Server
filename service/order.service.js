@@ -2,6 +2,7 @@ const { db } = require("../config/db.config");
 const { order, orderitem, productvariant, counter, user, product, productimage } = require("../db/schema");
 const { eq, and, desc, sql, inArray } = require("drizzle-orm");
 const crypto = require("crypto");
+const couponService = require("./coupon.service");
 
 /**
  * Helper to generate atomic sequential IDs
