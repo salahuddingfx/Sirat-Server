@@ -3,9 +3,6 @@
   "schema": "./db/schema.js",
   "out": "./drizzle",
   "dbCredentials": {
-    "host": "localhost",
-    "port": 3306,
-    "user": "root",
-    "database": "sirat"
+    "url": "mysql://root@localhost:3306/sirat"
   }
 }
