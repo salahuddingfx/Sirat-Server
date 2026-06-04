@@ -15,11 +15,17 @@ const escapeHtml = (value = "") =>
     .replace(/'/g, "&#39;");
 
 const resolveRecipient = async (order) => {
+  // Support both nested (guestInfo) and flat (guestName/guestEmail) formats
+  const guest = order?.guestInfo || {};
+  const guestName = guest.name || order?.guestName || "";
+  const guestEmail = guest.email || order?.guestEmail || "";
+  const guestPhone = guest.phone || order?.guestPhone || "";
+
   if (order?.user && typeof order.user === "object" && order.user.email) {
     return {
       name: order.user.name || "Customer",
       email: order.user.email,
-      phone: order.user.phone || order.guestPhone || "",
+      phone: order.user.phone || guestPhone,
     };
   }
 
@@ -32,16 +38,16 @@ const resolveRecipient = async (order) => {
       return {
         name: foundUser.name || "Customer",
         email: foundUser.email,
-        phone: foundUser.phone || order.guestPhone || "",
+        phone: foundUser.phone || guestPhone,
       };
     }
   }
 
-  if (order?.guestEmail) {
+  if (guestEmail) {
     return {
-      name: order.guestName || "Customer",
-      email: order.guestEmail,
-      phone: order.guestPhone || "",
+      name: guestName || "Customer",
+      email: guestEmail,
+      phone: guestPhone,
     };
   }
 
@@ -99,7 +105,7 @@ const buildInvoiceHtml = (order, recipient) => {
           <div style="margin-bottom:20px;">
             <h2 style="font-size:18px;margin:0 0 8px;">Order Details</h2>
             <p style="margin:0;color:#5a5650;">Payment: ${escapeHtml((order.paymentMethod || "cod").toUpperCase())}</p>
-            ${order.guestAddress ? `<p style="margin:6px 0 0;color:#5a5650;">Shipping: ${escapeHtml([order.guestAddress, order.guestCity].filter(Boolean).join(", "))}</p>` : ""}
+            ${(order.guestInfo?.address || order.guestAddress) ? `<p style="margin:6px 0 0;color:#5a5650;">Shipping: ${escapeHtml([order.guestInfo?.address || order.guestAddress, order.guestInfo?.city || order.guestCity].filter(Boolean).join(", "))}</p>` : ""}
           </div>
 
           <table style="width:100%;border-collapse:collapse;border:1px solid #eee;border-radius:12px;overflow:hidden;">
@@ -139,9 +145,9 @@ const buildAdminAlertHtml = (order, recipient) => {
       <div style="max-width:720px;margin:0 auto;background:#fff;border:1px solid #e9e4d9;border-radius:16px;padding:24px;">
         <h1 style="margin:0 0 12px;font-size:22px;">New Order Received</h1>
         <p style="margin:0 0 8px;">Order ID: <strong>${escapeHtml(order.orderId)}</strong></p>
-        <p style="margin:0 0 8px;">Customer: <strong>${escapeHtml(recipient?.name || order.guestName || "Guest")}</strong></p>
-        <p style="margin:0 0 8px;">Email: <strong>${escapeHtml(recipient?.email || order.guestEmail || "N/A")}</strong></p>
-        <p style="margin:0 0 8px;">Phone: <strong>${escapeHtml(recipient?.phone || order.guestPhone || "N/A")}</strong></p>
+        <p style="margin:0 0 8px;">Customer: <strong>${escapeHtml(recipient?.name || order.guestInfo?.name || order.guestName || "Guest")}</strong></p>
+        <p style="margin:0 0 8px;">Email: <strong>${escapeHtml(recipient?.email || order.guestInfo?.email || order.guestEmail || "N/A")}</strong></p>
+        <p style="margin:0 0 8px;">Phone: <strong>${escapeHtml(recipient?.phone || order.guestInfo?.phone || order.guestPhone || "N/A")}</strong></p>
         <p style="margin:0 0 8px;">Total: <strong>${money(order.totalAmount)}</strong></p>
         <p style="margin:0 0 18px;">Payment: <strong>${escapeHtml((order.paymentMethod || "cod").toUpperCase())}</strong></p>
         <h2 style="font-size:18px;margin:0 0 12px;">Items</h2>
@@ -205,8 +211,10 @@ const buildPdfBuffer = async (order, recipient) => {
     doc.fontSize(14).fillColor("#141311").text(`Total: ${money(order.totalAmount)}`);
     doc.moveDown();
 
-    if (order.guestAddress || order.guestCity) {
-      doc.fontSize(11).fillColor("#5a5650").text(`Shipping Address: ${[order.guestAddress, order.guestCity].filter(Boolean).join(", ")}`);
+    const shippingAddress = order.guestInfo?.address || order.guestAddress;
+    const shippingCity = order.guestInfo?.city || order.guestCity;
+    if (shippingAddress || shippingCity) {
+      doc.fontSize(11).fillColor("#5a5650").text(`Shipping Address: ${[shippingAddress, shippingCity].filter(Boolean).join(", ")}`);
     }
 
     doc.end();
