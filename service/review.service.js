@@ -1,8 +1,12 @@
 const { db } = require("../config/db.config");
 const { review, product, user } = require("../db/schema");
-const { eq, and, desc } = require("drizzle-orm");
+const { eq, and, desc, sql } = require("drizzle-orm");
 const crypto = require("crypto");
 
+// Drizzle's select() doesn't support nested objects — they get treated as
+// ambiguous column aliases and MySQL throws. Use flat keys with explicit
+// `sql` aliases, then nest them back in `shapeReviewRow` so the API
+// contract stays `{ product: { name, slug, images }, author: { avatar } }`.
 const reviewSelect = {
   id: review.id,
   userId: review.userId,
@@ -13,14 +17,32 @@ const reviewSelect = {
   isApproved: review.isApproved,
   createdAt: review.createdAt,
   updatedAt: review.updatedAt,
-  product: {
-    name: product.name,
-    slug: product.slug,
-    images: product.images,
-  },
-  author: {
-    avatar: user.avatar,
-  },
+  productName: product.name,
+  productSlug: product.slug,
+  productImages: product.images,
+  authorAvatar: user.avatar,
+};
+
+const shapeReviewRow = (row) => {
+  if (!row) return row;
+  const {
+    productName,
+    productSlug,
+    productImages,
+    authorAvatar,
+    ...rest
+  } = row;
+  return {
+    ...rest,
+    product: {
+      name: productName,
+      slug: productSlug,
+      images: productImages,
+    },
+    author: {
+      avatar: authorAvatar,
+    },
+  };
 };
 
 const createReview = async (reviewData) => {
@@ -57,7 +79,7 @@ const getAllApprovedReviews = async () => {
     .where(eq(review.isApproved, true))
     .orderBy(desc(review.createdAt));
 
-  return rows;
+  return rows.map(shapeReviewRow);
 };
 
 const getAllReviews = async () => {
@@ -67,7 +89,7 @@ const getAllReviews = async () => {
     .leftJoin(user, eq(review.userId, user.id))
     .orderBy(desc(review.createdAt));
 
-  return rows;
+  return rows.map(shapeReviewRow);
 };
 
 const updateReviewApproval = async (id, isApproved) => {
