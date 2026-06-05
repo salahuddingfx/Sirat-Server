@@ -3,6 +3,7 @@ const { user, passwordresettoken } = require("../db/schema");
 const { eq, and } = require("drizzle-orm");
 const crypto = require("crypto");
 const bcrypt = require("bcryptjs");
+const { sendPasswordResetEmail } = require("./mail.service");
 
 const generateOtp = () => {
   return String(Math.floor(100000 + Math.random() * 900000));
@@ -25,14 +26,9 @@ const requestReset = async (email) => {
   });
 
   try {
-    const { sendEmail } = require("./mail.service");
-    await sendEmail({
-      to: email,
-      subject: "Sirat Password Reset Code",
-      html: `<p>Your password reset code is: <strong>${otp}</strong></p><p>This code expires in 15 minutes.</p>`,
-    });
+    await sendPasswordResetEmail(email, otp);
   } catch (mailErr) {
-    console.error("Failed to send password reset email:", mailErr.message);
+    console.error("Failed to send password reset email:", mailErr?.message || mailErr);
   }
 
   return { message: "If that email is registered, a reset code has been sent." };
