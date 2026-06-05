@@ -1,12 +1,13 @@
 const { db } = require("../config/db.config");
-const { review, product, user } = require("../db/schema");
-const { eq, and, desc, sql } = require("drizzle-orm");
+const { review, product, productimage, user } = require("../db/schema");
+const { eq, and, desc, inArray } = require("drizzle-orm");
 const crypto = require("crypto");
 
-// Drizzle's select() doesn't support nested objects — they get treated as
-// ambiguous column aliases and MySQL throws. Use flat keys with explicit
-// `sql` aliases, then nest them back in `shapeReviewRow` so the API
-// contract stays `{ product: { name, slug, images }, author: { avatar } }`.
+// Flat column selection — Drizzle's select() does not support nested
+// objects (they get treated as ambiguous aliases and break query prep),
+// and `product.images` doesn't exist as a column on the product table
+// (images live in `productimage`). We fetch the image URLs in a second
+// query and attach them per-review in `enrichWithProductAndAuthor`.
 const reviewSelect = {
   id: review.id,
   userId: review.userId,
@@ -19,30 +20,38 @@ const reviewSelect = {
   updatedAt: review.updatedAt,
   productName: product.name,
   productSlug: product.slug,
-  productImages: product.images,
   authorAvatar: user.avatar,
 };
 
-const shapeReviewRow = (row) => {
-  if (!row) return row;
-  const {
-    productName,
-    productSlug,
-    productImages,
-    authorAvatar,
-    ...rest
-  } = row;
-  return {
-    ...rest,
-    product: {
-      name: productName,
-      slug: productSlug,
-      images: productImages,
-    },
-    author: {
-      avatar: authorAvatar,
-    },
-  };
+const fetchProductImagesMap = async (productIds) => {
+  const map = new Map();
+  if (!productIds || productIds.length === 0) return map;
+  const rows = await db.select().from(productimage).where(inArray(productimage.productId, productIds));
+  for (const img of rows) {
+    if (!map.has(img.productId)) map.set(img.productId, []);
+    map.get(img.productId).push(img);
+  }
+  return map;
+};
+
+const enrichWithProductAndAuthor = (rows) => {
+  const productIds = [...new Set(rows.map((r) => r.productId).filter(Boolean))];
+  return Promise.all([fetchProductImagesMap(productIds)]).then(([imgMap]) =>
+    rows.map((row) => {
+      const { productName, productSlug, authorAvatar, ...rest } = row;
+      return {
+        ...rest,
+        product: {
+          name: productName,
+          slug: productSlug,
+          images: imgMap.get(row.productId) || [],
+        },
+        author: {
+          avatar: authorAvatar,
+        },
+      };
+    })
+  );
 };
 
 const createReview = async (reviewData) => {
@@ -79,7 +88,7 @@ const getAllApprovedReviews = async () => {
     .where(eq(review.isApproved, true))
     .orderBy(desc(review.createdAt));
 
-  return rows.map(shapeReviewRow);
+  return enrichWithProductAndAuthor(rows);
 };
 
 const getAllReviews = async () => {
@@ -89,7 +98,7 @@ const getAllReviews = async () => {
     .leftJoin(user, eq(review.userId, user.id))
     .orderBy(desc(review.createdAt));
 
-  return rows.map(shapeReviewRow);
+  return enrichWithProductAndAuthor(rows);
 };
 
 const updateReviewApproval = async (id, isApproved) => {
