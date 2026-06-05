@@ -42,6 +42,8 @@ const getAllApprovedReviews = async () => {
     updatedAt: review.updatedAt,
     product: {
       name: product.name,
+      slug: product.slug,
+      images: product.images,
     },
   })
   .from(review)
@@ -65,6 +67,8 @@ const getAllReviews = async () => {
     updatedAt: review.updatedAt,
     product: {
       name: product.name,
+      slug: product.slug,
+      images: product.images,
     },
   })
   .from(review)
