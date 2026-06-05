@@ -824,6 +824,60 @@ const sendContactNotification = async (contact) => {
   );
 };
 
+/* ---------- PASSWORD RESET (OTP) ---------- */
+const buildPasswordResetHtml = (otp) => {
+  const safeOtp = String(otp || "").replace(/\D/g, "").slice(0, 6);
+  const inner = `
+    <p style="margin:0 0 6px;font-size:16px;color:${BRAND.charcoal};">Hi there,</p>
+    <p style="margin:0 0 22px;font-size:15px;color:${BRAND.muted};line-height:1.6;">
+      We received a request to reset the password for your ${BRAND.name} account.
+      Use the one-time code below to continue. If you didn't make this request, you can safely ignore this email.
+    </p>
+
+    <!-- OTP CARD -->
+    <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="margin:0 0 22px;">
+      <tr>
+        <td align="center" style="padding:28px 18px;background:${BRAND.cream};border:1px solid ${BRAND.border};border-radius:14px;">
+          <div style="font-size:11px;font-weight:800;letter-spacing:0.18em;color:${BRAND.muted};text-transform:uppercase;margin-bottom:14px;">Your Reset Code</div>
+          <div style="font-family:'Courier New',Courier,monospace;font-size:38px;font-weight:800;letter-spacing:0.35em;color:${BRAND.charcoal};line-height:1;">${safeOtp || "------"}</div>
+          <div style="margin-top:18px;display:inline-block;padding:6px 14px;background:#FEF3C7;border:1px solid #FDE68A;border-radius:99px;">
+            <span style="font-size:11px;font-weight:700;letter-spacing:0.1em;color:#B45309;text-transform:uppercase;">⏱ Expires in 15 minutes</span>
+          </div>
+        </td>
+      </tr>
+    </table>
+
+    <!-- SECURITY NOTE -->
+    <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="margin:0 0 18px;">
+      <tr>
+        <td style="padding:14px 16px;background:#FEF2F2;border-left:3px solid #DC2626;border-radius:0 10px 10px 0;">
+          <div style="font-size:12px;font-weight:800;letter-spacing:0.08em;color:#991B1B;text-transform:uppercase;margin-bottom:4px;">Security Tip</div>
+          <div style="font-size:13px;color:#7F1D1D;line-height:1.5;">Never share this code with anyone. ${BRAND.name} staff will never ask for it.</div>
+        </td>
+      </tr>
+    </table>
+
+    <p style="margin:18px 0 0;font-size:14px;color:${BRAND.muted};line-height:1.6;text-align:center;">
+      Need help? Reach us at
+      <a href="mailto:${BRAND.email}" style="color:${BRAND.goldSoft};text-decoration:none;font-weight:600;">${BRAND.email}</a>.
+    </p>
+  `;
+
+  return emailBase(inner, {
+    heading: "Reset Your Password",
+    subheading: "Use the code below to set a new password",
+    previewText: `Your ${BRAND.name} password reset code — valid for 15 minutes.`,
+  });
+};
+
+const sendPasswordResetEmail = async (email, otp) => {
+  return await sendEmail({
+    to: email,
+    subject: `${BRAND.name} · Password Reset Code`,
+    html: buildPasswordResetHtml(otp),
+  });
+};
+
 /* =========================================================================
    PUBLIC API
    ========================================================================= */
@@ -886,6 +940,7 @@ module.exports = {
   sendStatusUpdateEmail,
   sendNewsletterWelcomeEmail,
   sendContactNotification,
+  sendPasswordResetEmail,
   INVOICE_SIZES,
   BRAND,
 };
