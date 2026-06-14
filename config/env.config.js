@@ -47,6 +47,11 @@ const env = {
     fromName: process.env.MAIL_FROM_NAME,
     brevoApiKey: process.env.BREVO_API_KEY,
   },
+  cloudinary: {
+    cloudName: process.env.CLOUDINARY_CLOUD_NAME,
+    apiKey: process.env.CLOUDINARY_API_KEY,
+    apiSecret: process.env.CLOUDINARY_API_SECRET,
+  },
 };
 
 // Validate that critical env variables are loaded
