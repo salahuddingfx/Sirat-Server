@@ -12,14 +12,20 @@ const env = {
   jwtSecret: process.env.JWT_SECRET || "your_default_jwt_secret_here",
   jwtExpiresIn: process.env.JWT_EXPIRES_IN || "30d",
   clientUrl: process.env.CLIENT_URL || "https://sirat.salahuddin.codes",
-  corsOrigins: [
+  adminUrl: process.env.ADMIN_URL || "https://sirat-admin.salahuddin.codes",
+  corsOrigins: Array.from(new Set([
     ...(process.env.CORS_ORIGIN
-      ? process.env.CORS_ORIGIN.split(",").map((s) => s.trim()).filter(Boolean)
-      : ["http://localhost:3000", "http://localhost:5173", "http://localhost:5174"]),
+      ? process.env.CORS_ORIGIN.split(",").map((s) => s.trim())
+      : []),
+    process.env.CLIENT_URL,
+    process.env.ADMIN_URL,
+    "http://localhost:3000",
+    "http://localhost:5173",
+    "http://localhost:5174",
     "https://sirat.salahuddin.codes",
     "https://sirat-admin.salahuddin.codes",
     "https://sirat-api.salahuddin.codes"
-  ],
+  ].map((s) => s?.trim()).filter(Boolean))),
   rateLimit: {
     windowMs: toInt(process.env.RATE_LIMIT_WINDOW_MS, 10 * 60 * 1000),
     max: toInt(process.env.RATE_LIMIT_MAX, 2000),
