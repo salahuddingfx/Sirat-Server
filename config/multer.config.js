@@ -54,6 +54,7 @@ const fileFilter = (req, file, cb) => {
 // Helper to get public URL from uploaded file
 const getPublicUrl = (req, file) => {
   if (!file) return null;
+  if (file.cloudinaryUrl) return file.cloudinaryUrl;
   const parts = file.path.split(/[\\/]uploads[\\/]/);
   const relativePath = parts[1] || file.filename;
   return `${req.protocol}://${req.get("host")}/uploads/${relativePath.replace(/\\/g, "/")}`;
