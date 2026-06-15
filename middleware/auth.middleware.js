@@ -1,7 +1,5 @@
 const jwt = require("jsonwebtoken");
-const { db } = require("../config/db.config");
-const { user: userTable } = require("../db/schema");
-const { eq } = require("drizzle-orm");
+const User = require("../models/user.model");
 const env = require("../config/env.config");
 
 const protect = async (req, res, next) => {
@@ -12,22 +10,14 @@ const protect = async (req, res, next) => {
       token = req.headers.authorization.split(" ")[1];
       const decoded = jwt.verify(token, env.jwtSecret);
       
-      const user = await db.query.user.findFirst({
-        where: eq(userTable.id, decoded.id),
-        columns: {
-          id: true,
-          name: true,
-          email: true,
-          role: true,
-          avatar: true
-        }
-      });
+      const user = await User.findById(decoded.id).select("name email role avatar");
 
       if (!user) {
         return res.status(401).json({ success: false, message: "User no longer exists" });
       }
 
-      req.user = user;
+      req.user = user.toObject();
+      req.user.id = req.user._id; // client/admin compatibility
       return next();
     } catch (error) {
       return res.status(401).json({ success: false, message: "Not authorized, token failed" });
