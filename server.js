@@ -10,7 +10,8 @@ const xss = require("./middleware/xss-clean");
 const hpp = require("hpp");
 const rateLimit = require("express-rate-limit");
 const compression = require("compression");
-const { connectDB, prisma } = require("./config/db.config");
+const { connectDB } = require("./config/db.config");
+const Product = require("./models/product.model");
 
 const app = express();
 
@@ -105,7 +106,7 @@ const trackLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
 });
-app.use("/api/track", trackLimiter, require("./routes/track.routes"));
+app.use("/api/v1/track", trackLimiter, require("./routes/track.routes"));
 
 // Admin endpoints get a much higher (or effectively uncapped) rate limit
 // because they require a valid JWT — abusive callers are blocked at the
@@ -125,35 +126,39 @@ const limiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
 });
-app.use("/api", (req, res, next) => {
+app.use("/api/v1", (req, res, next) => {
   if (req.path.startsWith("/admin")) return adminLimiter(req, res, next);
   return limiter(req, res, next);
 });
 
 // API Info Route
-app.get("/api", (req, res) => {
+app.get("/api/v1", (req, res) => {
   res.json({ message: "Welcome to Sirat API" });
 });
 
-// Routes
-app.use("/api/auth", require("./routes/auth.routes"));
-app.use("/api/products", require("./routes/product.routes"));
-app.use("/api/orders", require("./routes/order.routes"));
-app.use("/api/admin", require("./routes/admin.routes"));
-app.use("/api/admin/analytics", require("./routes/analytics.routes"));
-app.use("/api/settings", require("./routes/settings.routes"));
-app.use("/api/hero", require("./routes/hero.routes"));
-app.use("/api/reviews", require("./routes/review.routes"));
-app.use("/api/contact", require("./routes/contact.routes"));
-app.use("/api/coupons", require("./routes/coupon.routes"));
-app.use("/api/users", require("./routes/user.routes"));
-app.use("/api/newsletter", require("./routes/newsletter.routes"));
-app.use("/api/categories", require("./routes/category.routes"));
-app.use("/api/flash-sale", require("./routes/flashSale.routes"));
-app.use("/api/password", require("./routes/password.routes"));
-app.use("/api/cart", require("./routes/cart.routes"));
-app.use("/api/wishlist", require("./routes/wishlist.routes"));
-app.use("/api/team", require("./routes/team.routes"));
+// Create API Router for versioning and compatibility
+const apiRouter = express.Router();
+
+apiRouter.use("/auth", require("./routes/auth.routes"));
+apiRouter.use("/products", require("./routes/product.routes"));
+apiRouter.use("/orders", require("./routes/order.routes"));
+apiRouter.use("/admin", require("./routes/admin.routes"));
+apiRouter.use("/admin/analytics", require("./routes/analytics.routes"));
+apiRouter.use("/settings", require("./routes/settings.routes"));
+apiRouter.use("/hero", require("./routes/hero.routes"));
+apiRouter.use("/reviews", require("./routes/review.routes"));
+apiRouter.use("/contact", require("./routes/contact.routes"));
+apiRouter.use("/coupons", require("./routes/coupon.routes"));
+apiRouter.use("/users", require("./routes/user.routes"));
+apiRouter.use("/newsletter", require("./routes/newsletter.routes"));
+apiRouter.use("/categories", require("./routes/category.routes"));
+apiRouter.use("/flash-sale", require("./routes/flashSale.routes"));
+apiRouter.use("/password", require("./routes/password.routes"));
+apiRouter.use("/cart", require("./routes/cart.routes"));
+apiRouter.use("/wishlist", require("./routes/wishlist.routes"));
+apiRouter.use("/team", require("./routes/team.routes"));
+
+app.use("/api/v1", apiRouter);
 
 // Helper to get the correct path to the client's index.html depending on environment (dev vs production cPanel)
 const getClientIndexPath = () => {
@@ -179,13 +184,8 @@ app.get("/product/:slug", async (req, res, next) => {
   try {
     const { slug } = req.params;
 
-    // Fetch product details from the database using Drizzle
-    const product = await prisma.query.product.findFirst({
-      where: eq(productTable.slug, slug),
-      with: {
-        images: true,
-      },
-    });
+    // Fetch product details from the database using Mongoose
+    const product = await Product.findOne({ slug });
 
     const indexPath = getClientIndexPath();
 
@@ -284,7 +284,7 @@ app.get("*splat", (req, res) => {
   } else {
     // If client build is missing, don't crash with 500 ENOENT. 
     // Gracefully handle requests to API/root, or return 404 for other paths.
-    if (req.path === "/" || req.path === "/api" || req.path === "/api/") {
+    if (req.path === "/" || req.path === "/api/v1" || req.path === "/api/v1/") {
       return res.json({ message: "Welcome to Sirat API" });
     }
     res.status(404).json({
