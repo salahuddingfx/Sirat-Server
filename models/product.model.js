@@ -25,7 +25,7 @@ const ProductSchema = new mongoose.Schema({
   rating: { type: Number, default: 0, required: true },
   featured: { type: Boolean, default: false, required: true },
   categoryId: { type: String, required: true, ref: "Category" },
-  images: [{ type: String }],
+  images: [{ url: { type: String, required: true } }],
   variants: [VariantSchema],
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now }

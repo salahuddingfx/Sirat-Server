@@ -1,23 +1,25 @@
-const { db, connectDB, pool } = require("../config/db.config");
-const { product, user, category } = require("../db/schema");
-const { count } = require("drizzle-orm");
+const { connectDB } = require("../config/db.config");
+const Product = require("../models/product.model");
+const User = require("../models/user.model");
+const Category = require("../models/category.model");
+const mongoose = require("mongoose");
 
 async function check() {
   try {
     console.log("Checking database connection...");
     await connectDB();
-    console.log("Successfully connected to MySQL via Drizzle!");
+    console.log("Successfully connected to MongoDB via Mongoose!");
 
-    const [pResult] = await db.select({ value: count() }).from(product);
-    const [uResult] = await db.select({ value: count() }).from(user);
-    const [cResult] = await db.select({ value: count() }).from(category);
+    const pCount = await Product.countDocuments();
+    const uCount = await User.countDocuments();
+    const cCount = await Category.countDocuments();
 
     console.log("\x1b[32mStats:\x1b[0m");
-    console.log(`- Products: ${pResult.value}`);
-    console.log(`- Users: ${uResult.value}`);
-    console.log(`- Categories: ${cResult.value}`);
+    console.log(`- Products: ${pCount}`);
+    console.log(`- Users: ${uCount}`);
+    console.log(`- Categories: ${cCount}`);
 
-    await pool.end();
+    await mongoose.connection.close();
     process.exit(0);
   } catch (err) {
     console.error("\x1b[31mDatabase check failed:\x1b[0m", err.message);

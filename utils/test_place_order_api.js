@@ -1,5 +1,20 @@
+const { connectDB } = require("../config/db.config");
+const Product = require("../models/product.model");
+const mongoose = require("mongoose");
+
 async function run() {
   try {
+    await connectDB();
+    const dbProduct = await Product.findOne({});
+    if (!dbProduct) {
+      console.error("No product found in database to checkout.");
+      await mongoose.connection.close();
+      process.exit(1);
+    }
+
+    const targetVariant = dbProduct.variants && dbProduct.variants[0] ? dbProduct.variants[0].label : "M";
+    const targetPrice = dbProduct.price;
+
     const payload = {
       guestInfo: {
         name: "Salahuddin",
@@ -10,19 +25,21 @@ async function run() {
       },
       items: [
         {
-          product: "6a1d37fdfadc75231e0c3bc6", // Oat-Bar Oversized Tee
+          product: dbProduct._id,
           quantity: 1,
-          variant: "M",
-          price: 1250
+          variant: targetVariant,
+          price: targetPrice
         }
       ],
       shippingCharge: 120,
-      totalAmount: 1370,
+      totalAmount: targetPrice + 120,
       paymentMethod: "cod"
     };
 
-    console.log("Sending guest checkout POST request to http://localhost:5000/api/orders...");
-    const res = await fetch("http://localhost:5000/api/orders", {
+    await mongoose.connection.close();
+
+    console.log("Sending guest checkout POST request to http://localhost:5000/api/v1/orders for product:", dbProduct._id);
+    const res = await fetch("http://localhost:5000/api/v1/orders", {
       method: "POST",
       headers: {
         "Content-Type": "application/json"

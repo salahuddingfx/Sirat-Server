@@ -1,63 +1,43 @@
-const { db } = require("../config/db.config");
-const { review, product, productimage, user } = require("../db/schema");
-const { eq, and, desc, inArray } = require("drizzle-orm");
-const crypto = require("crypto");
+const Review = require("../models/review.model");
+const Product = require("../models/product.model");
+const User = require("../models/user.model");
 
-// Flat column selection — Drizzle's select() does not support nested
-// objects (they get treated as ambiguous aliases and break query prep),
-// and `product.images` doesn't exist as a column on the product table
-// (images live in `productimage`). We fetch the image URLs in a second
-// query and attach them per-review in `enrichWithProductAndAuthor`.
-const reviewSelect = {
-  id: review.id,
-  userId: review.userId,
-  name: review.name,
-  productId: review.productId,
-  rating: review.rating,
-  comment: review.comment,
-  isApproved: review.isApproved,
-  createdAt: review.createdAt,
-  updatedAt: review.updatedAt,
-  productName: product.name,
-  productSlug: product.slug,
-  authorAvatar: user.avatar,
+const formatReview = (r) => {
+  if (!r) return null;
+  const obj = r.toObject ? r.toObject() : r;
+  obj.id = obj._id;
+  return obj;
 };
 
-const fetchProductImagesMap = async (productIds) => {
-  const map = new Map();
-  if (!productIds || productIds.length === 0) return map;
-  const rows = await db.select().from(productimage).where(inArray(productimage.productId, productIds));
-  for (const img of rows) {
-    if (!map.has(img.productId)) map.set(img.productId, []);
-    map.get(img.productId).push(img);
-  }
-  return map;
-};
+const enrichWithProductAndAuthor = (reviews) => {
+  return reviews.map((r) => {
+    const obj = r.toObject ? r.toObject() : r;
+    obj.id = obj._id;
+    
+    // Map product
+    const prod = obj.productId;
+    obj.product = prod && typeof prod === "object" ? {
+      name: prod.name,
+      slug: prod.slug,
+      images: (prod.images || []).map((img) => typeof img === "string" ? { url: img } : img),
+    } : null;
+    
+    // Map author
+    const author = obj.userId;
+    obj.author = author && typeof author === "object" ? {
+      avatar: author.avatar || null,
+    } : { avatar: null };
 
-const enrichWithProductAndAuthor = (rows) => {
-  const productIds = [...new Set(rows.map((r) => r.productId).filter(Boolean))];
-  return Promise.all([fetchProductImagesMap(productIds)]).then(([imgMap]) =>
-    rows.map((row) => {
-      const { productName, productSlug, authorAvatar, ...rest } = row;
-      return {
-        ...rest,
-        product: {
-          name: productName,
-          slug: productSlug,
-          images: imgMap.get(row.productId) || [],
-        },
-        author: {
-          avatar: authorAvatar,
-        },
-      };
-    })
-  );
+    // Ensure database keys exist for flat fields
+    obj.productId = prod && typeof prod === "object" ? prod._id : obj.productId;
+    obj.userId = author && typeof author === "object" ? author._id : obj.userId;
+    
+    return obj;
+  });
 };
 
 const createReview = async (reviewData) => {
-  const reviewId = crypto.randomUUID();
-  await db.insert(review).values({
-    id: reviewId,
+  const created = await Review.create({
     userId: reviewData.user,
     name: reviewData.name,
     productId: reviewData.product,
@@ -66,56 +46,48 @@ const createReview = async (reviewData) => {
     isApproved: reviewData.isApproved || false,
   });
 
-  const [created] = await db.select().from(review).where(eq(review.id, reviewId)).limit(1);
-  return created;
+  return formatReview(created);
 };
 
 const getProductReviews = async (productId) => {
-  return await db.select()
-    .from(review)
-    .where(and(
-      eq(review.productId, productId),
-      eq(review.isApproved, true)
-    ))
-    .orderBy(desc(review.createdAt));
+  const reviews = await Review.find({
+    productId: productId,
+    isApproved: true
+  }).sort({ createdAt: -1 });
+
+  return reviews.map(formatReview);
 };
 
 const getAllApprovedReviews = async () => {
-  const rows = await db.select(reviewSelect)
-    .from(review)
-    .leftJoin(product, eq(review.productId, product.id))
-    .leftJoin(user, eq(review.userId, user.id))
-    .where(eq(review.isApproved, true))
-    .orderBy(desc(review.createdAt));
+  const reviews = await Review.find({ isApproved: true })
+    .populate("productId")
+    .populate("userId")
+    .sort({ createdAt: -1 });
 
-  return enrichWithProductAndAuthor(rows);
+  return enrichWithProductAndAuthor(reviews);
 };
 
 const getAllReviews = async () => {
-  const rows = await db.select(reviewSelect)
-    .from(review)
-    .leftJoin(product, eq(review.productId, product.id))
-    .leftJoin(user, eq(review.userId, user.id))
-    .orderBy(desc(review.createdAt));
+  const reviews = await Review.find()
+    .populate("productId")
+    .populate("userId")
+    .sort({ createdAt: -1 });
 
-  return enrichWithProductAndAuthor(rows);
+  return enrichWithProductAndAuthor(reviews);
 };
 
 const updateReviewApproval = async (id, isApproved) => {
-  await db.update(review)
-    .set({ isApproved })
-    .where(eq(review.id, id));
-
-  const [updated] = await db.select().from(review).where(eq(review.id, id)).limit(1);
-  return updated;
+  const updated = await Review.findByIdAndUpdate(
+    id,
+    { $set: { isApproved } },
+    { new: true }
+  );
+  return formatReview(updated);
 };
 
 const deleteReview = async (id) => {
-  const [deleted] = await db.select().from(review).where(eq(review.id, id)).limit(1);
-  if (deleted) {
-    await db.delete(review).where(eq(review.id, id));
-  }
-  return deleted;
+  const deleted = await Review.findByIdAndDelete(id);
+  return formatReview(deleted);
 };
 
 module.exports = {

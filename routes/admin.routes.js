@@ -3,12 +3,13 @@ const router = express.Router();
 const multer = require("multer");
 const { storage } = require("../config/multer.config");
 const { protect, admin } = require("../middleware/auth.middleware");
+const uploadCloudinary = require("../middleware/uploadCloudinary");
 const upload = multer({ storage });
 const heroController = require("../controllers/hero.controller");
 const adminController = require("../controllers/admin.controller");
 router.get("/hero", heroController.adminGetAllSlides);
-router.post("/hero", upload.single("image"), heroController.adminCreateSlide);
-router.put("/hero/:id", upload.single("image"), heroController.adminUpdateSlide);
+router.post("/hero", upload.single("image"), uploadCloudinary, heroController.adminCreateSlide);
+router.put("/hero/:id", upload.single("image"), uploadCloudinary, heroController.adminUpdateSlide);
 router.delete("/hero/:id", heroController.adminDeleteSlide);
 
 // Review Moderation
@@ -69,8 +70,8 @@ const teamController = require("../controllers/team.controller");
 const uploadTeam = multer({ storage });
 router.get("/team", teamController.adminGetAllMembers);
 router.get("/team/:id", teamController.adminGetMemberById);
-router.post("/team", uploadTeam.single("avatar"), teamController.adminCreateMember);
-router.put("/team/:id", uploadTeam.single("avatar"), teamController.adminUpdateMember);
+router.post("/team", uploadTeam.single("avatar"), uploadCloudinary, teamController.adminCreateMember);
+router.put("/team/:id", uploadTeam.single("avatar"), uploadCloudinary, teamController.adminUpdateMember);
 router.delete("/team/:id", teamController.adminDeleteMember);
 
 module.exports = router;

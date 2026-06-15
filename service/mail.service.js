@@ -1,7 +1,6 @@
 const PDFDocument = require("pdfkit");
-const { db } = require("../config/db.config");
-const { user, settings } = require("../db/schema");
-const { eq } = require("drizzle-orm");
+const User = require("../models/user.model");
+const Settings = require("../models/settings.model");
 const { sendEmail } = require("../utils/mailer");
 
 /* =========================================================================
@@ -67,10 +66,7 @@ const resolveRecipient = async (order) => {
   }
 
   if (order?.userId) {
-    const foundUser = await db.query.user.findFirst({
-      where: eq(user.id, order.userId),
-      columns: { name: true, email: true, phone: true },
-    });
+    const foundUser = await User.findById(order.userId).select("name email phone");
     if (foundUser?.email) {
       return {
         name: foundUser.name || "Customer",
@@ -87,11 +83,8 @@ const resolveRecipient = async (order) => {
 };
 
 const getAdminEmails = async () => {
-  const admins = await db.query.user.findMany({
-    where: eq(user.role, "admin"),
-    columns: { email: true },
-  });
-  const settingsRecord = await db.query.settings.findFirst();
+  const admins = await User.find({ role: "admin" }).select("email");
+  const settingsRecord = await Settings.findOne();
   const emails = admins.map((a) => a.email);
   if (settingsRecord?.email && !emails.includes(settingsRecord.email)) emails.push(settingsRecord.email);
   if (process.env.SMTP_USER && !emails.includes(process.env.SMTP_USER)) emails.push(process.env.SMTP_USER);

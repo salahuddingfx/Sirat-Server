@@ -1,15 +1,14 @@
-const { db } = require("../config/db.config");
-const { coupon } = require("../db/schema");
-const { eq, and, desc } = require("drizzle-orm");
-const crypto = require("crypto");
+const Coupon = require("../models/coupon.model");
+
+const formatCoupon = (c) => {
+  if (!c) return null;
+  const obj = c.toObject ? c.toObject() : c;
+  obj.id = obj._id;
+  return obj;
+};
 
 const createCoupon = async (couponData) => {
-  const couponId = crypto.randomUUID();
-  // Ensure the code is stored in uppercase
-  const formattedData = {
-    ...couponData,
-    id: couponId,
-  };
+  const formattedData = { ...couponData };
   if (formattedData.code) {
     formattedData.code = formattedData.code.toUpperCase();
   }
@@ -17,24 +16,19 @@ const createCoupon = async (couponData) => {
     formattedData.expiryDate = new Date(formattedData.expiryDate);
   }
 
-  await db.insert(coupon).values(formattedData);
-  return await db.query.coupon.findFirst({
-    where: eq(coupon.id, couponId),
-  });
+  const created = await Coupon.create(formattedData);
+  return formatCoupon(created);
 };
 
 const getAllCoupons = async () => {
-  return await db.query.coupon.findMany({
-    orderBy: [desc(coupon.createdAt)],
-  });
+  const coupons = await Coupon.find().sort({ createdAt: -1 });
+  return coupons.map(formatCoupon);
 };
 
 const validateCoupon = async (code, totalAmount) => {
-  const foundCoupon = await db.query.coupon.findFirst({
-    where: and(
-      eq(coupon.code, code.toUpperCase()),
-      eq(coupon.isActive, true)
-    ),
+  const foundCoupon = await Coupon.findOne({
+    code: code.toUpperCase(),
+    isActive: true,
   });
 
   if (!foundCoupon) {
@@ -73,23 +67,17 @@ const updateCoupon = async (id, couponData) => {
     formattedData.expiryDate = new Date(formattedData.expiryDate);
   }
 
-  await db.update(coupon)
-    .set(formattedData)
-    .where(eq(coupon.id, id));
-
-  return await db.query.coupon.findFirst({
-    where: eq(coupon.id, id),
-  });
+  const updated = await Coupon.findByIdAndUpdate(
+    id,
+    { $set: formattedData },
+    { new: true }
+  );
+  return formatCoupon(updated);
 };
 
 const deleteCoupon = async (id) => {
-  const deleted = await db.query.coupon.findFirst({
-    where: eq(coupon.id, id),
-  });
-  if (deleted) {
-    await db.delete(coupon).where(eq(coupon.id, id));
-  }
-  return deleted;
+  const deleted = await Coupon.findByIdAndDelete(id);
+  return formatCoupon(deleted);
 };
 
 module.exports = {

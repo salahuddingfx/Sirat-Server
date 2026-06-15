@@ -1,6 +1,6 @@
-const { db } = require("../config/db.config");
-const { product, category, productimage, productvariant, orderitem, order } = require("../db/schema");
-const { eq, and, desc, sum, not, inArray } = require("drizzle-orm");
+const Product = require("../models/product.model");
+const Category = require("../models/category.model");
+const Order = require("../models/order.model");
 const crypto = require("crypto");
 
 /**
@@ -41,291 +41,199 @@ const normalizeProductData = (data) => {
 };
 
 /**
- * Helper to populate category, images, and variants for a list of products
+ * Maps Product object to return client-compatible keys (e.g. id and _id, category as nested object)
  */
-const populateProducts = async (products, executor = db) => {
-  if (products.length === 0) return [];
-  const productIds = products.map((p) => p.id);
-
-  // Fetch all images for these products
-  const images = await executor.select()
-    .from(productimage)
-    .where(inArray(productimage.productId, productIds));
-
-  // Fetch all variants for these products
-  const variants = await executor.select()
-    .from(productvariant)
-    .where(inArray(productvariant.productId, productIds));
-
-  // Fetch categories
-  const categoryIds = [...new Set(products.map((p) => p.categoryId).filter(Boolean))];
-  const categories = categoryIds.length > 0
-    ? await executor.select().from(category).where(inArray(category.id, categoryIds))
-    : [];
-
-  const categoryMap = new Map(categories.map((c) => [c.id, c]));
-  const imagesMap = new Map();
-  const variantsMap = new Map();
-
-  images.forEach((img) => {
-    if (!imagesMap.has(img.productId)) imagesMap.set(img.productId, []);
-    imagesMap.get(img.productId).push(img);
-  });
-
-  variants.forEach((v) => {
-    if (!variantsMap.has(v.productId)) variantsMap.set(v.productId, []);
-    variantsMap.get(v.productId).push(v);
-  });
-
-  return products.map((p) => ({
-    ...p,
-    _id: p.id,
-    category: categoryMap.get(p.categoryId) || null,
-    images: imagesMap.get(p.id) || [],
-    variants: variantsMap.get(p.id) || [],
-  }));
+const formatProduct = (p) => {
+  if (!p) return null;
+  const obj = p.toObject ? p.toObject() : p;
+  obj.id = obj._id;
+  if (obj.categoryId && typeof obj.categoryId === "object") {
+    obj.category = {
+      ...obj.categoryId,
+      id: obj.categoryId._id,
+    };
+    obj.categoryId = obj.categoryId._id;
+  }
+  if (obj.variants) {
+    obj.variants = obj.variants.map((v) => ({ ...v, id: v._id }));
+  }
+  return obj;
 };
 
 const getAllProducts = async (query = {}) => {
-  let conditions = [];
+  const filter = {};
   
   if (query.category) {
-    const [cat] = await db.select()
-      .from(category)
-      .where(eq(category.name, query.category))
-      .limit(1);
+    const cat = await Category.findOne({ name: query.category });
     if (cat) {
-      conditions.push(eq(product.categoryId, cat.id));
+      filter.categoryId = cat._id;
     } else {
       return [];
     }
   }
 
   if (query.featured !== undefined) {
-    conditions.push(eq(product.featured, query.featured === "true" || query.featured === true));
+    filter.featured = query.featured === "true" || query.featured === true;
   }
 
   if (query.status) {
-    conditions.push(eq(product.status, query.status));
+    filter.status = query.status;
   }
 
-  const products = await db.select()
-    .from(product)
-    .where(conditions.length > 0 ? and(...conditions) : undefined)
-    .orderBy(desc(product.createdAt));
+  const products = await Product.find(filter)
+    .populate("categoryId")
+    .sort({ createdAt: -1 });
 
-  return await populateProducts(products);
+  return products.map(formatProduct);
 };
 
 const getProductById = async (idOrSlug) => {
-  let [foundProduct] = await db.select()
-    .from(product)
-    .where(eq(product.id, idOrSlug))
-    .limit(1);
-
-  if (!foundProduct) {
-    [foundProduct] = await db.select()
-      .from(product)
-      .where(eq(product.slug, idOrSlug))
-      .limit(1);
+  let foundProduct = null;
+  if (idOrSlug && idOrSlug.match(/^[0-9a-fA-F-]{36}$/)) {
+    // If it's a UUID string
+    foundProduct = await Product.findById(idOrSlug).populate("categoryId");
   }
 
-  if (!foundProduct) return null;
+  if (!foundProduct) {
+    foundProduct = await Product.findOne({ slug: idOrSlug }).populate("categoryId");
+  }
 
-  const [populated] = await populateProducts([foundProduct]);
-  return populated;
+  if (!foundProduct && idOrSlug) {
+    // fallback attempt to search by ID directly
+    foundProduct = await Product.findById(idOrSlug).populate("categoryId");
+  }
+
+  return formatProduct(foundProduct);
 };
 
 const createProduct = async (productData) => {
   const normalized = normalizeProductData(productData);
   const { images, variants, category: categoryName, categoryId: providedCategoryId, ...rest } = normalized;
 
-  return await db.transaction(async (tx) => {
-    let categoryId = providedCategoryId;
-    if (!categoryId && categoryName) {
-      const [cat] = await tx.select().from(category).where(eq(category.name, categoryName)).limit(1);
-      if (cat) {
-        categoryId = cat.id;
-      } else {
-        const newCatId = crypto.randomUUID();
-        await tx.insert(category).values({
-          id: newCatId,
-          name: categoryName,
-          image: "",
-        });
-        categoryId = newCatId;
-      }
-    }
-
-    if (!categoryId) {
-      throw new Error("Category is required.");
-    }
-
-    if (!rest.slug && rest.name) {
-      rest.slug = rest.name
-        .toLowerCase()
-        .replace(/[^\w ]+/g, "")
-        .replace(/ +/g, "-");
-    }
-
-    const productId = crypto.randomUUID();
-    await tx.insert(product).values({
-      ...rest,
-      id: productId,
-      categoryId,
-    });
-
-    const finalImages = images || [];
-    for (const imgUrl of finalImages) {
-      await tx.insert(productimage).values({
-        id: crypto.randomUUID(),
-        url: imgUrl,
-        productId,
+  let categoryId = providedCategoryId;
+  if (!categoryId && categoryName) {
+    const cat = await Category.findOne({ name: categoryName });
+    if (cat) {
+      categoryId = cat._id;
+    } else {
+      const newCat = await Category.create({
+        name: categoryName,
       });
+      categoryId = newCat._id;
     }
+  }
 
-    const finalVariants = variants && variants.length > 0
-      ? variants.map((v) => ({
-          id: crypto.randomUUID(),
-          label: v.label,
-          priceDelta: parseFloat(v.priceDelta) || 0,
-          stock: parseInt(v.stock, 10) || 0,
-          productId,
-        }))
-      : [{
-          id: crypto.randomUUID(),
-          label: "M",
-          priceDelta: 0,
-          stock: 10,
-          productId,
-        }];
+  if (!categoryId) {
+    throw new Error("Category is required.");
+  }
 
-    for (const v of finalVariants) {
-      await tx.insert(productvariant).values(v);
-    }
+  if (!rest.slug && rest.name) {
+    rest.slug = rest.name
+      .toLowerCase()
+      .replace(/[^\w ]+/g, "")
+      .replace(/ +/g, "-");
+  }
 
-    const [created] = await tx.select().from(product).where(eq(product.id, productId)).limit(1);
-    if (!created) return null;
+  const finalVariants = variants && variants.length > 0
+    ? variants.map((v) => ({
+        label: v.label,
+        priceDelta: parseFloat(v.priceDelta) || 0,
+        stock: parseInt(v.stock, 10) || 0,
+      }))
+    : [{
+        label: "M",
+        priceDelta: 0,
+        stock: 10,
+      }];
 
-    const [populated] = await populateProducts([created], tx);
-    return populated;
+  const created = await Product.create({
+    ...rest,
+    categoryId,
+    images: (images || []).map((img) => typeof img === "string" ? { url: img } : img),
+    variants: finalVariants,
   });
+
+  const populated = await Product.findById(created._id).populate("categoryId");
+  return formatProduct(populated);
 };
 
 const updateProduct = async (id, productData) => {
   const normalized = normalizeProductData(productData);
   const { images, variants, category: categoryName, categoryId: providedCategoryId, ...rest } = normalized;
 
-  return await db.transaction(async (tx) => {
-    let categoryId = providedCategoryId;
-    if (!categoryId && categoryName) {
-      const [cat] = await tx.select().from(category).where(eq(category.name, categoryName)).limit(1);
-      if (cat) categoryId = cat.id;
+  let categoryId = providedCategoryId;
+  if (!categoryId && categoryName) {
+    const cat = await Category.findOne({ name: categoryName });
+    if (cat) categoryId = cat._id;
+  }
+
+  const updatePayload = { ...rest };
+  if (categoryId) updatePayload.categoryId = categoryId;
+  if (images !== undefined) {
+    updatePayload.images = images.map((img) => typeof img === "string" ? { url: img } : img);
+  }
+  if (variants !== undefined) {
+    updatePayload.variants = variants.map((v) => ({
+      label: v.label,
+      priceDelta: parseFloat(v.priceDelta) || 0,
+      stock: parseInt(v.stock, 10) || 0,
+    }));
+  }
+
+  // Filter out undefined values
+  Object.keys(updatePayload).forEach((key) => {
+    if (updatePayload[key] === undefined) {
+      delete updatePayload[key];
     }
-
-    const updatePayload = { ...rest };
-    if (categoryId) updatePayload.categoryId = categoryId;
-
-    // Filter out undefined values to avoid overwriting with null
-    Object.keys(updatePayload).forEach((key) => {
-      if (updatePayload[key] === undefined) {
-        delete updatePayload[key];
-      }
-    });
-
-    if (Object.keys(updatePayload).length > 0) {
-      await tx.update(product)
-        .set(updatePayload)
-        .where(eq(product.id, id));
-    }
-
-    if (images) {
-      await tx.delete(productimage).where(eq(productimage.productId, id));
-      for (const imgUrl of images) {
-        await tx.insert(productimage).values({
-          id: crypto.randomUUID(),
-          url: imgUrl,
-          productId: id,
-        });
-      }
-    }
-
-    if (variants) {
-      await tx.delete(productvariant).where(eq(productvariant.productId, id));
-      for (const v of variants) {
-        await tx.insert(productvariant).values({
-          id: crypto.randomUUID(),
-          label: v.label,
-          priceDelta: parseFloat(v.priceDelta) || 0,
-          stock: parseInt(v.stock, 10) || 0,
-          productId: id,
-        });
-      }
-    }
-
-    const [updated] = await tx.select().from(product).where(eq(product.id, id)).limit(1);
-    if (!updated) return null;
-
-    const [populated] = await populateProducts([updated], tx);
-    return populated;
   });
+
+  const updated = await Product.findByIdAndUpdate(
+    id,
+    { $set: updatePayload },
+    { new: true }
+  ).populate("categoryId");
+
+  return formatProduct(updated);
 };
 
 const deleteProduct = async (id) => {
-  const [deleted] = await db.select().from(product).where(eq(product.id, id)).limit(1);
-  if (deleted) {
-    await db.delete(product).where(eq(product.id, id));
-  }
-  return deleted;
+  const deleted = await Product.findByIdAndDelete(id);
+  return formatProduct(deleted);
 };
 
 const getFeaturedProducts = async () => {
-  const products = await db.select()
-    .from(product)
-    .where(and(
-      eq(product.featured, true),
-      eq(product.status, "Live")
-    ))
-    .orderBy(desc(product.createdAt));
+  const products = await Product.find({
+    featured: true,
+    status: "Live"
+  })
+  .populate("categoryId")
+  .sort({ createdAt: -1 });
 
-  return await populateProducts(products);
+  return products.map(formatProduct);
 };
 
 const getBestSellerProduct = async () => {
-  const bestSellers = await db.select({
-    productId: orderitem.productId,
-  })
-  .from(orderitem)
-  .innerJoin(order, eq(orderitem.orderId, order.id))
-  .where(not(eq(order.status, "cancelled")))
-  .groupBy(orderitem.productId)
-  .orderBy(desc(sum(orderitem.quantity)))
-  .limit(1);
+  const bestSellers = await Order.aggregate([
+    { $match: { status: { $ne: "cancelled" } } },
+    { $unwind: "$items" },
+    { $group: { _id: "$items.productId", totalQty: { $sum: "$items.quantity" } } },
+    { $sort: { totalQty: -1 } },
+    { $limit: 1 }
+  ]);
 
-  if (bestSellers.length > 0 && bestSellers[0].productId) {
-    const [foundProduct] = await db.select()
-      .from(product)
-      .where(eq(product.id, bestSellers[0].productId))
-      .limit(1);
-
+  if (bestSellers.length > 0 && bestSellers[0]._id) {
+    const foundProduct = await Product.findById(bestSellers[0]._id).populate("categoryId");
     if (foundProduct) {
-      const [populated] = await populateProducts([foundProduct]);
-      return populated;
+      return formatProduct(foundProduct);
     }
   }
 
-  const [fallbackProduct] = await db.select()
-    .from(product)
-    .where(eq(product.status, "Live"))
-    .orderBy(desc(product.rating), desc(product.createdAt))
-    .limit(1);
+  // Fallback to highest rated live product
+  const fallbackProduct = await Product.findOne({ status: "Live" })
+    .populate("categoryId")
+    .sort({ rating: -1, createdAt: -1 });
 
-  if (fallbackProduct) {
-    const [populated] = await populateProducts([fallbackProduct]);
-    return populated;
-  }
-
-  return null;
+  return formatProduct(fallbackProduct);
 };
 
 module.exports = {
@@ -336,5 +244,4 @@ module.exports = {
   deleteProduct,
   getFeaturedProducts,
   getBestSellerProduct,
-  populateProducts,
 };

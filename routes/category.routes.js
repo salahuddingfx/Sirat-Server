@@ -3,12 +3,13 @@ const router = express.Router();
 const multer = require("multer");
 const { storage } = require("../config/multer.config");
 const categoryController = require("../controllers/category.controller");
+const uploadCloudinary = require("../middleware/uploadCloudinary");
 
 const upload = multer({ storage });
 
 router.get("/", categoryController.getCategories);
-router.post("/", upload.single("image"), categoryController.createCategory);
-router.put("/:id", upload.single("image"), categoryController.updateCategory);
+router.post("/", upload.single("image"), uploadCloudinary, categoryController.createCategory);
+router.put("/:id", upload.single("image"), uploadCloudinary, categoryController.updateCategory);
 router.delete("/:id", categoryController.deleteCategory);
 
 module.exports = router;

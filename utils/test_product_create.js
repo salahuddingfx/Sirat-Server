@@ -1,4 +1,5 @@
-const { connectDB, pool } = require("../config/db.config");
+const { connectDB } = require("../config/db.config");
+const mongoose = require("mongoose");
 const productService = require("../service/product.service");
 
 async function test() {
@@ -26,13 +27,16 @@ async function test() {
     console.log(`Creating product with name: ${uniqueName}...`);
     const result = await productService.createProduct(dummyProductData);
     console.log("Product creation succeeded!", result);
-    await pool.end();
+    await mongoose.connection.close();
     process.exit(0);
   } catch (err) {
     console.error("Product creation test failed with error:", err);
-    await pool.end();
+    try {
+      await mongoose.connection.close();
+    } catch (_) {}
     process.exit(1);
   }
 }
 
 test();
+

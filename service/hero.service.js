@@ -1,49 +1,39 @@
-const { db } = require("../config/db.config");
-const { heroslide } = require("../db/schema");
-const { eq, asc } = require("drizzle-orm");
-const crypto = require("crypto");
+const HeroSlide = require("../models/heroSlide.model");
+
+const formatSlide = (slide) => {
+  if (!slide) return null;
+  const obj = slide.toObject ? slide.toObject() : slide;
+  obj.id = obj._id;
+  return obj;
+};
 
 const getActiveSlides = async () => {
-  return await db.query.heroslide.findMany({
-    where: eq(heroslide.isActive, true),
-    orderBy: [asc(heroslide.order)],
-  });
+  const slides = await HeroSlide.find({ isActive: true }).sort({ order: 1 });
+  return slides.map(formatSlide);
 };
 
 const getAllSlides = async () => {
-  return await db.query.heroslide.findMany({
-    orderBy: [asc(heroslide.order)],
-  });
+  const slides = await HeroSlide.find().sort({ order: 1 });
+  return slides.map(formatSlide);
 };
 
 const createSlide = async (slideData) => {
-  const slideId = crypto.randomUUID();
-  await db.insert(heroslide).values({
-    id: slideId,
-    ...slideData,
-  });
-  return await db.query.heroslide.findFirst({
-    where: eq(heroslide.id, slideId),
-  });
+  const created = await HeroSlide.create(slideData);
+  return formatSlide(created);
 };
 
 const updateSlide = async (id, slideData) => {
-  await db.update(heroslide)
-    .set(slideData)
-    .where(eq(heroslide.id, id));
-  return await db.query.heroslide.findFirst({
-    where: eq(heroslide.id, id),
-  });
+  const updated = await HeroSlide.findByIdAndUpdate(
+    id,
+    { $set: slideData },
+    { new: true }
+  );
+  return formatSlide(updated);
 };
 
 const deleteSlide = async (id) => {
-  const deleted = await db.query.heroslide.findFirst({
-    where: eq(heroslide.id, id),
-  });
-  if (deleted) {
-    await db.delete(heroslide).where(eq(heroslide.id, id));
-  }
-  return deleted;
+  const deleted = await HeroSlide.findByIdAndDelete(id);
+  return formatSlide(deleted);
 };
 
 module.exports = {

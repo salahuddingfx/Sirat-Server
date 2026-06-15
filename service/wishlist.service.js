@@ -1,61 +1,68 @@
-const { db } = require("../config/db.config");
-const { wishlist, product, productimage } = require("../db/schema");
-const { eq, and, inArray, desc } = require("drizzle-orm");
-const crypto = require("crypto");
+const Wishlist = require("../models/wishlist.model");
+const Product = require("../models/product.model");
+
+// Format product images mapping for frontend compatibility
+const formatProduct = (p) => {
+  if (!p) return null;
+  const obj = p.toObject ? p.toObject() : p;
+  obj.id = obj._id;
+  if (obj.categoryId && typeof obj.categoryId === "object") {
+    obj.category = {
+      ...obj.categoryId,
+      id: obj.categoryId._id,
+    };
+    obj.categoryId = obj.categoryId._id;
+  }
+  if (obj.variants) {
+    obj.variants = obj.variants.map((v) => ({ ...v, id: v._id }));
+  }
+  if (obj.images) {
+    obj.images = obj.images.map((img) => typeof img === "string" ? { url: img } : img);
+  }
+  return obj;
+};
 
 const getWishlist = async (userId) => {
-  const items = await db.select()
-    .from(wishlist)
-    .where(eq(wishlist.userId, userId))
-    .orderBy(desc(wishlist.createdAt));
+  const items = await Wishlist.find({ userId })
+    .populate({
+      path: "productId",
+      populate: { path: "categoryId" }
+    })
+    .sort({ createdAt: -1 });
 
-  const productIds = items.map(w => w.productId);
-  if (productIds.length === 0) return [];
-
-  const products = await db.select().from(product).where(inArray(product.id, productIds));
-  const productMap = new Map(products.map(p => [p.id, p]));
-
-  const images = await db.select().from(productimage).where(inArray(productimage.productId, productIds));
-  const imageMap = new Map();
-  images.forEach(img => {
-    if (!imageMap.has(img.productId)) imageMap.set(img.productId, []);
-    imageMap.get(img.productId).push(img);
+  return items.map((w) => {
+    const itemObj = w.toObject();
+    const prodObj = formatProduct(w.productId);
+    
+    return {
+      wishlistId: itemObj._id,
+      product: prodObj ? {
+        ...prodObj,
+        images: (prodObj.images || []).map((img) => img.url || img),
+      } : null,
+      addedAt: itemObj.createdAt,
+    };
   });
-
-  return items.map(w => ({
-    wishlistId: w.id,
-    product: {
-      ...productMap.get(w.productId),
-      images: (imageMap.get(w.productId) || []).map(img => img.url),
-    },
-    addedAt: w.createdAt,
-  }));
 };
 
 const addToWishlist = async (userId, productId) => {
-  const [existing] = await db.select()
-    .from(wishlist)
-    .where(and(eq(wishlist.userId, userId), eq(wishlist.productId, productId)))
-    .limit(1);
+  const existing = await Wishlist.findOne({ userId, productId });
 
-  if (existing) return { message: "Already in wishlist", id: existing.id };
+  if (existing) {
+    return { message: "Already in wishlist", id: existing._id };
+  }
 
-  const id = crypto.randomUUID();
-  await db.insert(wishlist).values({ id, userId, productId });
-  return { message: "Added to wishlist", id };
+  const created = await Wishlist.create({ userId, productId });
+  return { message: "Added to wishlist", id: created._id };
 };
 
 const removeFromWishlist = async (userId, productId) => {
-  await db.delete(wishlist)
-    .where(and(eq(wishlist.userId, userId), eq(wishlist.productId, productId)));
+  await Wishlist.deleteOne({ userId, productId });
   return { message: "Removed from wishlist" };
 };
 
 const isWishlisted = async (userId, productId) => {
-  const [item] = await db.select({ id: wishlist.id })
-    .from(wishlist)
-    .where(and(eq(wishlist.userId, userId), eq(wishlist.productId, productId)))
-    .limit(1);
+  const item = await Wishlist.findOne({ userId, productId });
   return !!item;
 };
 

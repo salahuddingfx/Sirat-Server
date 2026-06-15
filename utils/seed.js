@@ -1,6 +1,9 @@
-const { db, connectDB, pool } = require("../config/db.config");
-const schema = require("../db/schema");
-const crypto = require("crypto");
+const { connectDB } = require("../config/db.config");
+const Category = require("../models/category.model");
+const Product = require("../models/product.model");
+const Order = require("../models/order.model");
+const Review = require("../models/review.model");
+const mongoose = require("mongoose");
 
 const categories = [
   {
@@ -171,27 +174,22 @@ const seedDB = async () => {
   try {
     console.log("Connecting to database...");
     await connectDB();
-    console.log("Database connected. Clearing existing products and categories...");
+    console.log("Database connected. Clearing existing orders, reviews, products, and categories...");
 
-    // Delete in order to avoid foreign key violations
-    await db.delete(schema.orderitem);
-    await db.delete(schema.review);
-    await db.delete(schema.productvariant);
-    await db.delete(schema.productimage);
-    await db.delete(schema.product);
-    await db.delete(schema.category);
+    await Order.deleteMany({});
+    await Review.deleteMany({});
+    await Product.deleteMany({});
+    await Category.deleteMany({});
 
     console.log("Seeding new categories...");
     const categoryMap = {};
     for (const cat of categories) {
-      const categoryId = crypto.randomUUID();
-      await db.insert(schema.category).values({
-        id: categoryId,
+      const createdCat = await Category.create({
         name: cat.name,
         image: cat.image,
         featured: cat.featured,
       });
-      categoryMap[cat.name] = categoryId;
+      categoryMap[cat.name] = createdCat._id;
     }
 
     console.log("Seeding new products...");
@@ -202,35 +200,19 @@ const seedDB = async () => {
         .replace(/[^\w ]+/g, "")
         .replace(/ +/g, "-");
 
-      const productId = crypto.randomUUID();
-      await db.insert(schema.product).values({
+      const mappedImages = images.map((img) => ({ url: img }));
+
+      await Product.create({
         ...rest,
-        id: productId,
         slug,
         categoryId: categoryMap[categoryName],
+        images: mappedImages,
+        variants: variants,
       });
-
-      for (const imgUrl of images) {
-        await db.insert(schema.productimage).values({
-          id: crypto.randomUUID(),
-          url: imgUrl,
-          productId,
-        });
-      }
-
-      for (const variant of variants) {
-        await db.insert(schema.productvariant).values({
-          id: crypto.randomUUID(),
-          label: variant.label,
-          priceDelta: variant.priceDelta,
-          stock: variant.stock,
-          productId,
-        });
-      }
     }
 
     console.log("Database seeded successfully with premium items and categories!");
-    await pool.end();
+    await mongoose.connection.close();
     process.exit(0);
   } catch (error) {
     console.error("Error seeding database:", error);

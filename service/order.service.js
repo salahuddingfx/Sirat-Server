@@ -1,250 +1,251 @@
-const { db } = require("../config/db.config");
-const { order, orderitem, productvariant, counter, user, product, productimage } = require("../db/schema");
-const { eq, and, desc, sql, inArray } = require("drizzle-orm");
-const crypto = require("crypto");
+const mongoose = require("mongoose");
+const Order = require("../models/order.model");
+const Product = require("../models/product.model");
+const User = require("../models/user.model");
+const Counter = require("../models/counter.model");
 const couponService = require("./coupon.service");
+const crypto = require("crypto");
 
 /**
- * Helper to generate atomic sequential IDs
+ * Format Product helper mapping images for frontend compatibility
  */
-const getNextSequenceValue = async (tx, sequenceName) => {
-  await tx.insert(counter)
-    .values({ id: crypto.randomUUID(), name: sequenceName, count: 1 })
-    .onDuplicateKeyUpdate({
-      set: { count: sql`count + 1` }
-    });
-
-  const [result] = await tx.select()
-    .from(counter)
-    .where(eq(counter.name, sequenceName))
-    .limit(1);
-
-  return result.count;
+const formatProduct = (p) => {
+  if (!p) return null;
+  const obj = p.toObject ? p.toObject() : p;
+  obj.id = obj._id;
+  if (obj.categoryId && typeof obj.categoryId === "object") {
+    obj.category = {
+      ...obj.categoryId,
+      id: obj.categoryId._id,
+    };
+    obj.categoryId = obj.categoryId._id;
+  }
+  if (obj.variants) {
+    obj.variants = obj.variants.map((v) => ({ ...v, id: v._id }));
+  }
+  if (obj.images) {
+    obj.images = obj.images.map((img) => typeof img === "string" ? { url: img } : img);
+  }
+  return obj;
 };
 
 /**
- * Helper to populate orderitems, their products (with images), and users for a list of orders.
- * Transforms flat DB columns into the nested shape the frontend expects:
- *   _id, guestInfo { name, email, phone, address, city, zipCode },
- *   paymentDetails { senderNumber, txId }, items[] with product.images[]
+ * Helper to generate sequential order IDs atomically
  */
-const populateOrders = async (orders, executor = db) => {
-  if (orders.length === 0) return [];
-  const orderIds = orders.map((o) => o.id);
+const getNextSequenceValue = async (sequenceName, session) => {
+  const counter = await Counter.findOneAndUpdate(
+    { name: sequenceName },
+    { $inc: { count: 1 } },
+    { new: true, upsert: true, session }
+  );
+  return counter.count;
+};
 
-  // Fetch all orderitems for these orders
-  const items = await executor.select()
-    .from(orderitem)
-    .where(inArray(orderitem.orderId, orderIds));
-
-  // Fetch products for all these items
-  const productIds = [...new Set(items.map((item) => item.productId).filter(Boolean))];
-  const products = productIds.length > 0
-    ? await executor.select().from(product).where(inArray(product.id, productIds))
-    : [];
-  const productMap = new Map(products.map((p) => [p.id, p]));
-
-  // Fetch product images for all products referenced in items
-  const productImages = productIds.length > 0
-    ? await executor.select().from(productimage).where(inArray(productimage.productId, productIds))
-    : [];
-  const productImagesMap = new Map();
-  productImages.forEach((img) => {
-    if (!productImagesMap.has(img.productId)) productImagesMap.set(img.productId, []);
-    productImagesMap.get(img.productId).push(img);
-  });
-
-  // Attach product (with images) to each item
-  const populatedItems = items.map((item) => {
-    const prod = productMap.get(item.productId) || null;
-    return {
-      ...item,
-      product: prod ? {
-        ...prod,
-        images: productImagesMap.get(prod.id) || [],
-      } : null,
+/**
+ * Helper to map flat database columns into the nested shape the frontend expects
+ */
+const populateOrders = async (orders) => {
+  const populated = [];
+  for (const o of orders) {
+    const orderObj = o.toObject ? o.toObject() : o;
+    orderObj.id = orderObj._id;
+    
+    // Map nested guestInfo from flat schema columns
+    orderObj.guestInfo = {
+      name: orderObj.guestName || "",
+      email: orderObj.guestEmail || "",
+      phone: orderObj.guestPhone || "",
+      address: orderObj.guestAddress || "",
+      city: orderObj.guestCity || "",
+      zipCode: orderObj.guestZipCode || "",
     };
-  });
 
-  // Fetch users for these orders
-  const userIds = [...new Set(orders.map((o) => o.userId).filter(Boolean))];
-  const users = userIds.length > 0
-    ? await executor.select({ id: user.id, name: user.name, email: user.email, phone: user.phone }).from(user).where(inArray(user.id, userIds))
-    : [];
-  const userMap = new Map(users.map((u) => [u.id, u]));
+    // Map nested paymentDetails from flat schema columns
+    orderObj.paymentDetails = {
+      senderNumber: orderObj.senderNumber || "",
+      txId: orderObj.txId || "",
+    };
 
-  // Group items by orderId
-  const itemsMap = new Map();
-  populatedItems.forEach((item) => {
-    if (!itemsMap.has(item.orderId)) itemsMap.set(item.orderId, []);
-    itemsMap.get(item.orderId).push(item);
-  });
+    // Populate order items products
+    const populatedItems = [];
+    if (orderObj.items) {
+      for (const item of orderObj.items) {
+        const itemObj = { ...item };
+        itemObj.id = itemObj._id;
+        
+        const prod = await Product.findById(item.productId).populate("categoryId");
+        if (prod) {
+          itemObj.product = formatProduct(prod);
+        } else {
+          itemObj.product = null;
+        }
+        populatedItems.push(itemObj);
+      }
+    }
+    orderObj.items = populatedItems;
+    
+    // Populate User Details
+    if (orderObj.userId) {
+      const usr = await User.findById(orderObj.userId).select("id name email phone");
+      if (usr) {
+        orderObj.user = usr.toObject();
+        orderObj.user.id = orderObj.user._id;
+      } else {
+        orderObj.user = null;
+      }
+    } else {
+      orderObj.user = null;
+    }
 
-  // Transform flat DB columns into the nested shape the frontend expects
-  return orders.map((o) => ({
-    _id: o.id,
-    id: o.id,
-    orderId: o.orderId,
-    status: o.status,
-    paymentMethod: o.paymentMethod,
-    paymentStatus: o.paymentStatus,
-    shippingCharge: o.shippingCharge,
-    totalAmount: o.totalAmount,
-    discountAmount: o.discountAmount || 0,
-    couponCode: o.couponCode || null,
-    createdAt: o.createdAt,
-    updatedAt: o.updatedAt,
-    // Nested guestInfo from flat columns
-    guestInfo: {
-      name: o.guestName || "",
-      email: o.guestEmail || "",
-      phone: o.guestPhone || "",
-      address: o.guestAddress || "",
-      city: o.guestCity || "",
-      zipCode: o.guestZipCode || "",
-    },
-    // Nested paymentDetails from flat columns
-    paymentDetails: {
-      senderNumber: o.senderNumber || "",
-      txId: o.txId || "",
-    },
-    // Rename orderitem → items
-    items: itemsMap.get(o.id) || [],
-    user: o.userId ? userMap.get(o.userId) || null : null,
-  }));
+    populated.push(orderObj);
+  }
+  return populated;
+};
+
+const getCategoryCode = (catName) => {
+  if (!catName) return "GEN";
+  const clean = catName.replace(/[^a-zA-Z\s]/g, "").trim();
+  const words = clean.split(/\s+/);
+  if (words.length >= 2) {
+    return (words[0][0] + words[1][0] + (words[2] ? words[2][0] : words[1][1] || "X")).toUpperCase();
+  }
+  return clean.substring(0, 3).toUpperCase();
+};
+
+const getProductCode = (prodName) => {
+  if (!prodName) return "PRD";
+  const clean = prodName.replace(/[^a-zA-Z0-9\s]/g, " ").trim();
+  const words = clean.split(/\s+/).filter(Boolean);
+  if (words.length >= 3) {
+    return (words[0][0] + words[1][0] + words[2][0]).toUpperCase();
+  } else if (words.length === 2) {
+    return (words[0][0] + words[1][0] + (words[1][1] || "X")).toUpperCase();
+  } else if (words.length === 1) {
+    return words[0].substring(0, 3).toUpperCase();
+  }
+  return "PRD";
 };
 
 const createOrder = async (orderData) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
   try {
-    return await db.transaction(async (tx) => {
-      // 1. Validate & Decrement stock for all items
-      for (const item of orderData.items) {
-        // Query variant and join with product to get details
-        const rows = await tx.select({
-          id: productvariant.id,
-          label: productvariant.label,
-          priceDelta: productvariant.priceDelta,
-          stock: productvariant.stock,
-          productId: productvariant.productId,
-          product: {
-            name: product.name,
-          },
-        })
-        .from(productvariant)
-        .innerJoin(product, eq(productvariant.productId, product.id))
-        .where(and(
-          eq(productvariant.productId, item.product),
-          eq(productvariant.label, item.variant)
-        ))
-        .limit(1);
-
-        const variant = rows[0] || null;
-
-        if (!variant) throw new Error(`Variant "${item.variant}" not found.`);
-        if (variant.stock < item.quantity) {
-          throw new Error(
-            `"${variant.product.name}" (Size: ${item.variant}) has insufficient stock. Available: ${variant.stock}, Requested: ${item.quantity}`
-          );
-        }
-
-        // Decrement stock
-        await tx.update(productvariant)
-          .set({ stock: sql`stock - ${item.quantity}` })
-          .where(eq(productvariant.id, variant.id));
+    // 1. Validate & Decrement stock for all items
+    let firstProductInfo = null;
+    for (const item of orderData.items) {
+      const prod = await Product.findById(item.product).populate("categoryId").session(session);
+      if (!prod) {
+        throw new Error(`Product not found.`);
       }
 
-      // 2. Compute subtotal from items
-      const computedSubtotal = orderData.items.reduce(
-        (sum, item) => sum + (item.price || 0) * item.quantity,
-        0
-      );
-
-      // 3. Validate coupon if provided
-      let finalDiscountAmount = 0;
-      let validatedCouponCode = null;
-      if (orderData.couponCode) {
-        try {
-          const couponResult = await couponService.validateCoupon(
-            orderData.couponCode,
-            computedSubtotal
-          );
-          finalDiscountAmount = couponResult.discountAmount;
-          validatedCouponCode = couponResult.code;
-        } catch (err) {
-          throw new Error(`Coupon validation failed: ${err.message}`);
-        }
+      if (!firstProductInfo) {
+        firstProductInfo = {
+          name: prod.name,
+          categoryName: prod.categoryId ? prod.categoryId.name : null,
+        };
       }
 
-      // 4. Verify totalAmount is not lower than expected (no undercharging)
-      const expectedMinTotal = computedSubtotal - finalDiscountAmount + (orderData.shippingCharge || 0);
-      if (orderData.totalAmount < expectedMinTotal - 1) {
-        throw new Error("Total amount mismatch. Please refresh and try again.");
+      // Find variant in nested subdocument array
+      const variant = prod.variants.find((v) => v.label === item.variant);
+      if (!variant) {
+        throw new Error(`Variant "${item.variant}" not found.`);
       }
 
-      // 5. Generate unique sequential order ID
-      const seq = await getNextSequenceValue(tx, "orderId");
-      const orderIdString = `SRT-${1000 + seq}`;
-
-      // 6. Create Order
-      const orderUuid = crypto.randomUUID();
-      await tx.insert(order).values({
-        id: orderUuid,
-        orderId: orderIdString,
-        userId: orderData.user || null,
-        guestName: orderData.guestInfo?.name || null,
-        guestEmail: orderData.guestInfo?.email || null,
-        guestPhone: orderData.guestInfo?.phone || null,
-        guestAddress: orderData.guestInfo?.address || null,
-        guestCity: orderData.guestInfo?.city || null,
-        guestZipCode: orderData.guestInfo?.zipCode || null,
-        shippingCharge: orderData.shippingCharge,
-        totalAmount: orderData.totalAmount,
-        discountAmount: finalDiscountAmount,
-        couponCode: validatedCouponCode,
-        paymentMethod: orderData.paymentMethod,
-        senderNumber: orderData.paymentDetails?.senderNumber || null,
-        txId: orderData.paymentDetails?.txId || null,
-      });
-
-      // 7. Create Order Items
-      for (const item of orderData.items) {
-        await tx.insert(orderitem).values({
-          id: crypto.randomUUID(),
-          productId: item.product,
-          quantity: item.quantity,
-          variant: item.variant,
-          price: item.price,
-          orderId: orderUuid,
-        });
+      if (variant.stock < item.quantity) {
+        throw new Error(
+          `"${prod.name}" (Size: ${item.variant}) has insufficient stock. Available: ${variant.stock}, Requested: ${item.quantity}`
+        );
       }
 
-      // 8. Fetch and return created order with relation mappings
-      const [newOrder] = await tx.select().from(order).where(eq(order.id, orderUuid)).limit(1);
-      if (!newOrder) return null;
+      // Decrement stock in variant subdocument and save
+      variant.stock -= item.quantity;
+      await prod.save({ session });
+    }
 
-      const [populated] = await populateOrders([newOrder], tx);
-      return populated;
-    });
+    // 2. Compute subtotal from items
+    const computedSubtotal = orderData.items.reduce(
+      (sum, item) => sum + (item.price || 0) * item.quantity,
+      0
+    );
+
+    // 3. Validate coupon if provided
+    let finalDiscountAmount = 0;
+    let validatedCouponCode = null;
+    if (orderData.couponCode) {
+      try {
+        const couponResult = await couponService.validateCoupon(
+          orderData.couponCode,
+          computedSubtotal
+        );
+        finalDiscountAmount = couponResult.discountAmount;
+        validatedCouponCode = couponResult.code;
+      } catch (err) {
+        throw new Error(`Coupon validation failed: ${err.message}`);
+      }
+    }
+
+    // 4. Verify totalAmount is not lower than expected
+    const expectedMinTotal = computedSubtotal - finalDiscountAmount + (orderData.shippingCharge || 0);
+    if (orderData.totalAmount < expectedMinTotal - 1) {
+      throw new Error("Total amount mismatch. Please refresh and try again.");
+    }
+
+    // 5. Generate unique sequential order ID
+    const seq = await getNextSequenceValue("orderId", session);
+    const catCode = getCategoryCode(firstProductInfo?.categoryName);
+    const prodCode = getProductCode(firstProductInfo?.name);
+    const orderIdString = `SRT-${catCode}-${prodCode}-${String(seq).padStart(6, "0")}`;
+
+    // 6. Create Order
+    const mappedItems = orderData.items.map((item) => ({
+      productId: item.product,
+      quantity: item.quantity,
+      variant: item.variant,
+      price: item.price,
+    }));
+
+    const [newOrder] = await Order.create([{
+      orderId: orderIdString,
+      userId: orderData.user || null,
+      guestName: orderData.guestInfo?.name || null,
+      guestEmail: orderData.guestInfo?.email || null,
+      guestPhone: orderData.guestInfo?.phone || null,
+      guestAddress: orderData.guestInfo?.address || null,
+      guestCity: orderData.guestInfo?.city || null,
+      guestZipCode: orderData.guestInfo?.zipCode || null,
+      shippingCharge: orderData.shippingCharge,
+      totalAmount: orderData.totalAmount,
+      discountAmount: finalDiscountAmount,
+      couponCode: validatedCouponCode,
+      paymentMethod: orderData.paymentMethod,
+      senderNumber: orderData.paymentDetails?.senderNumber || null,
+      txId: orderData.paymentDetails?.txId || null,
+      items: mappedItems,
+    }], { session });
+
+    await session.commitTransaction();
+    session.endSession();
+
+    const [populated] = await populateOrders([newOrder]);
+    return populated;
   } catch (error) {
+    await session.abortTransaction();
+    session.endSession();
     throw error;
   }
 };
 
 const getOrders = async (query = {}) => {
-  const conditions = [];
-  if (query.user) conditions.push(eq(order.userId, query.user));
-  if (query.status) conditions.push(eq(order.status, query.status));
+  const filter = {};
+  if (query.user) filter.userId = query.user;
+  if (query.status) filter.status = query.status;
 
-  const orders = await db.select()
-    .from(order)
-    .where(conditions.length > 0 ? and(...conditions) : undefined)
-    .orderBy(desc(order.createdAt));
-
+  const orders = await Order.find(filter).sort({ createdAt: -1 });
   return await populateOrders(orders);
 };
 
 const getOrderById = async (id) => {
-  const [foundOrder] = await db.select().from(order).where(eq(order.id, id)).limit(1);
+  const foundOrder = await Order.findById(id);
   if (!foundOrder) return null;
 
   const [populated] = await populateOrders([foundOrder]);
@@ -252,99 +253,101 @@ const getOrderById = async (id) => {
 };
 
 const updateOrderStatus = async (id, status) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
   try {
-    return await db.transaction(async (tx) => {
-      const [foundOrder] = await tx.select().from(order).where(eq(order.id, id)).limit(1);
-      if (!foundOrder) throw new Error("Order not found");
+    const foundOrder = await Order.findById(id).session(session);
+    if (!foundOrder) throw new Error("Order not found");
 
-      const orderItems = await tx.select().from(orderitem).where(eq(orderitem.orderId, id));
-      foundOrder.orderitem = orderItems;
+    const oldStatus = foundOrder.status;
+    const cancels = ["cancelled", "returned"];
+    const goingToCancel = cancels.includes(status);
+    const wasCanceled = cancels.includes(oldStatus);
 
-      const oldStatus = foundOrder.status;
-      const cancels = ["cancelled", "returned"];
-      const goingToCancel = cancels.includes(status);
-      const wasCanceled = cancels.includes(oldStatus);
-
-      // Transitioning to cancelled/returned: Restore stock
-      if (goingToCancel && !wasCanceled) {
-        for (const item of foundOrder.orderitem) {
-          await tx.update(productvariant)
-            .set({ stock: sql`stock + ${item.quantity}` })
-            .where(and(
-              eq(productvariant.productId, item.productId),
-              eq(productvariant.label, item.variant)
-            ));
-        }
-      }
-      // Transitioning from cancelled/returned back to active: Deduct stock again
-      else if (wasCanceled && !goingToCancel) {
-        for (const item of foundOrder.orderitem) {
-          const [variant] = await tx.select()
-            .from(productvariant)
-            .where(and(
-              eq(productvariant.productId, item.productId),
-              eq(productvariant.label, item.variant)
-            ))
-            .limit(1);
-
-          if (!variant || variant.stock < item.quantity) {
-            throw new Error(`Cannot restore order. Some items are out of stock.`);
+    // Transitioning to cancelled/returned: Restore stock
+    if (goingToCancel && !wasCanceled) {
+      for (const item of foundOrder.items) {
+        const prod = await Product.findById(item.productId).session(session);
+        if (prod) {
+          const variant = prod.variants.find((v) => v.label === item.variant);
+          if (variant) {
+            variant.stock += item.quantity;
+            await prod.save({ session });
           }
-          await tx.update(productvariant)
-            .set({ stock: sql`stock - ${item.quantity}` })
-            .where(eq(productvariant.id, variant.id));
         }
       }
+    }
+    // Transitioning from cancelled/returned back to active: Deduct stock again
+    else if (wasCanceled && !goingToCancel) {
+      for (const item of foundOrder.items) {
+        const prod = await Product.findById(item.productId).session(session);
+        if (!prod) {
+          throw new Error("Product no longer exists. Cannot restore order.");
+        }
+        const variant = prod.variants.find((v) => v.label === item.variant);
+        if (!variant || variant.stock < item.quantity) {
+          throw new Error(`Cannot restore order. Some items are out of stock.`);
+        }
+        variant.stock -= item.quantity;
+        await prod.save({ session });
+      }
+    }
 
-      await tx.update(order)
-        .set({ status })
-        .where(eq(order.id, id));
+    foundOrder.status = status;
+    await foundOrder.save({ session });
 
-      const [updated] = await tx.select().from(order).where(eq(order.id, id)).limit(1);
-      if (!updated) return null;
-      const [populated] = await populateOrders([updated], tx);
-      return populated;
-    });
+    await session.commitTransaction();
+    session.endSession();
+
+    const [populated] = await populateOrders([foundOrder]);
+    return populated;
   } catch (error) {
+    await session.abortTransaction();
+    session.endSession();
     throw error;
   }
 };
 
 const deleteOrder = async (id) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
   try {
-    return await db.transaction(async (tx) => {
-      const [foundOrder] = await tx.select().from(order).where(eq(order.id, id)).limit(1);
-      if (!foundOrder) throw new Error("Order not found");
+    const foundOrder = await Order.findById(id).session(session);
+    if (!foundOrder) throw new Error("Order not found");
 
-      const orderItems = await tx.select().from(orderitem).where(eq(orderitem.orderId, id));
-      foundOrder.orderitem = orderItems;
-
-      // Restore stock for non-cancelled/non-returned orders
-      const cancels = ["cancelled", "returned"];
-      if (!cancels.includes(foundOrder.status)) {
-        for (const item of foundOrder.orderitem) {
-          await tx.update(productvariant)
-            .set({ stock: sql`stock + ${item.quantity}` })
-            .where(and(
-              eq(productvariant.productId, item.productId),
-              eq(productvariant.label, item.variant)
-            ));
+    // Restore stock for active orders when they are deleted
+    const cancels = ["cancelled", "returned"];
+    if (!cancels.includes(foundOrder.status)) {
+      for (const item of foundOrder.items) {
+        const prod = await Product.findById(item.productId).session(session);
+        if (prod) {
+          const variant = prod.variants.find((v) => v.label === item.variant);
+          if (variant) {
+            variant.stock += item.quantity;
+            await prod.save({ session });
+          }
         }
       }
+    }
 
-      await tx.delete(order).where(eq(order.id, id));
-      return { message: "Order deleted" };
-    });
+    await Order.findByIdAndDelete(id).session(session);
+    await session.commitTransaction();
+    session.endSession();
+
+    return { message: "Order deleted" };
   } catch (error) {
+    await session.abortTransaction();
+    session.endSession();
     throw error;
   }
 };
 
 const updatePaymentStatus = async (id, paymentStatus) => {
-  await db.update(order)
-    .set({ paymentStatus })
-    .where(eq(order.id, id));
-  const [updated] = await db.select().from(order).where(eq(order.id, id)).limit(1);
+  const updated = await Order.findByIdAndUpdate(
+    id,
+    { $set: { paymentStatus } },
+    { new: true }
+  );
   if (!updated) throw new Error("Order not found");
   const [populated] = await populateOrders([updated]);
   return populated;
@@ -370,11 +373,12 @@ const updateOrderDetails = async (id, updates) => {
     data.txId = updates.paymentDetails.txId;
   }
 
-  await db.update(order)
-    .set(data)
-    .where(eq(order.id, id));
+  const updated = await Order.findByIdAndUpdate(
+    id,
+    { $set: data },
+    { new: true }
+  );
 
-  const [updated] = await db.select().from(order).where(eq(order.id, id)).limit(1);
   if (!updated) throw new Error("Order not found");
   const [populated] = await populateOrders([updated]);
   return populated;

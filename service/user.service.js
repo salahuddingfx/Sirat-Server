@@ -1,71 +1,50 @@
-const { db } = require("../config/db.config");
-const { user, address } = require("../db/schema");
-const { eq } = require("drizzle-orm");
-const crypto = require("crypto");
+const User = require("../models/user.model");
 const bcrypt = require("bcryptjs");
 
 const getUserById = async (id) => {
-  const [foundUser] = await db.select().from(user).where(eq(user.id, id)).limit(1);
+  const foundUser = await User.findById(id);
   if (!foundUser) return null;
 
-  const userAddresses = await db.select().from(address).where(eq(address.userId, id));
-  foundUser.addresses = userAddresses;
-
-  delete foundUser.password;
-  return foundUser;
+  const userToReturn = foundUser.toObject();
+  delete userToReturn.password;
+  userToReturn.id = userToReturn._id; // client/admin compatibility
+  return userToReturn;
 };
 
 const updateUserProfile = async (id, updateData) => {
   const { name, phone, username, avatar, addresses } = updateData;
 
-  let updatePayload = {};
+  const updatePayload = {};
   if (name !== undefined) updatePayload.name = name;
   if (phone !== undefined) updatePayload.phone = phone === "" ? null : phone;
   if (username !== undefined) updatePayload.username = username === "" ? null : username;
   if (avatar !== undefined) updatePayload.avatar = avatar;
+  if (addresses !== undefined) updatePayload.addresses = addresses;
 
-  return await db.transaction(async (tx) => {
-    if (Object.keys(updatePayload).length > 0) {
-      await tx.update(user)
-        .set(updatePayload)
-        .where(eq(user.id, id));
-    }
+  const updatedUser = await User.findByIdAndUpdate(
+    id,
+    { $set: updatePayload },
+    { new: true }
+  );
 
-    if (addresses && Array.isArray(addresses)) {
-      await tx.delete(address).where(eq(address.userId, id));
-      for (const addr of addresses) {
-        await tx.insert(address).values({
-          id: crypto.randomUUID(),
-          street: addr.street,
-          city: addr.city,
-          state: addr.state,
-          zipCode: addr.zipCode,
-          country: addr.country || "Bangladesh",
-          isDefault: addr.isDefault || false,
-          userId: id,
-        });
-      }
-    }
+  if (!updatedUser) return null;
 
-    const [updatedUser] = await tx.select().from(user).where(eq(user.id, id)).limit(1);
-    if (updatedUser) {
-      const userAddresses = await tx.select().from(address).where(eq(address.userId, id));
-      updatedUser.addresses = userAddresses;
-      delete updatedUser.password;
-    }
-    return updatedUser;
-  });
+  const userToReturn = updatedUser.toObject();
+  delete userToReturn.password;
+  userToReturn.id = userToReturn._id; // client/admin compatibility
+  return userToReturn;
 };
 
 const changePassword = async (userId, currentPassword, newPassword) => {
-  const [foundUser] = await db.select().from(user).where(eq(user.id, userId)).limit(1);
+  const foundUser = await User.findById(userId);
   if (!foundUser) throw new Error("User not found");
 
   const isMatch = await bcrypt.compare(currentPassword, foundUser.password);
   if (!isMatch) throw new Error("Current password is incorrect");
 
   const hashedPassword = await bcrypt.hash(newPassword, 10);
-  await db.update(user).set({ password: hashedPassword }).where(eq(user.id, userId));
+  foundUser.password = hashedPassword;
+  await foundUser.save();
 
   return { message: "Password updated successfully" };
 };
