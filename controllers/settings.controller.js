@@ -1,22 +1,24 @@
-const { db } = require("../config/db.config");
-const { settings } = require("../db/schema");
-const { eq } = require("drizzle-orm");
+const Settings = require("../models/settings.model");
 const cache = require("../config/cache.config");
 const { getPublicUrl } = require("../config/multer.config");
-const crypto = require("crypto");
+
+const formatSettings = (s) => {
+  if (!s) return null;
+  const obj = s.toObject ? s.toObject() : s;
+  obj.id = obj._id;
+  return obj;
+};
 
 const getSettings = async (req, res) => {
   try {
     const data = await cache.getOrSet(
       cache.buildKey("settings", "current"),
       async () => {
-        let s = await db.query.settings.findFirst();
+        let s = await Settings.findOne();
         if (!s) {
-          const sId = crypto.randomUUID();
-          await db.insert(settings).values({ id: sId });
-          s = await db.query.settings.findFirst({ where: eq(settings.id, sId) });
+          s = await Settings.create({});
         }
-        return s;
+        return formatSettings(s);
       },
       300
     );
@@ -28,28 +30,24 @@ const getSettings = async (req, res) => {
 
 const updateSettings = async (req, res) => {
   try {
-    let settingsRecord = await db.query.settings.findFirst();
+    let settingsRecord = await Settings.findOne();
     const updateData = { ...req.body };
     if (req.file) {
       updateData.logo = getPublicUrl(req, req.file);
     }
 
     if (!settingsRecord) {
-      const sId = crypto.randomUUID();
-      await db.insert(settings).values({
-        id: sId,
-        ...updateData,
-      });
-      settingsRecord = await db.query.settings.findFirst({ where: eq(settings.id, sId) });
+      settingsRecord = await Settings.create(updateData);
     } else {
-      await db.update(settings)
-        .set(updateData)
-        .where(eq(settings.id, settingsRecord.id));
-      settingsRecord = await db.query.settings.findFirst({ where: eq(settings.id, settingsRecord.id) });
+      settingsRecord = await Settings.findByIdAndUpdate(
+        settingsRecord._id,
+        { $set: updateData },
+        { new: true }
+      );
     }
     
     cache.invalidateNamespace("settings");
-    res.status(200).json({ success: true, data: settingsRecord });
+    res.status(200).json({ success: true, data: formatSettings(settingsRecord) });
   } catch (error) {
     res.status(400).json({ success: false, message: error.message });
   }
