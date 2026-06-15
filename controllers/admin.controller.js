@@ -1,8 +1,6 @@
 const orderService = require("../service/order.service");
 const productService = require("../service/product.service");
-const { db } = require("../config/db.config");
-const { user } = require("../db/schema");
-const { eq, count, desc } = require("drizzle-orm");
+const User = require("../models/user.model");
 const { sendStatusUpdateEmail } = require("../service/mail.service");
 const cache = require("../config/cache.config");
 
@@ -14,10 +12,7 @@ const getDashboardStats = async (req, res) => {
         const totalOrders = await orderService.getOrders();
         const totalProducts = await productService.getAllProducts();
         
-        const [totalUsersRes] = await db.select({ value: count() })
-          .from(user)
-          .where(eq(user.role, "user"));
-        const totalUsers = totalUsersRes.value;
+        const totalUsers = await User.countDocuments({ role: "user" });
 
         const revenue = totalOrders.reduce((acc, order) => acc + order.totalAmount, 0);
         const lowStock = totalProducts.filter((p) => p.stock < 10).length;
@@ -71,20 +66,17 @@ const updateOrderStatus = async (req, res) => {
 
 const getAllUsers = async (req, res) => {
   try {
-    const users = await db.query.user.findMany({
-      columns: {
-        id: true,
-        name: true,
-        email: true,
-        username: true,
-        phone: true,
-        role: true,
-        avatar: true,
-        createdAt: true,
-      },
-      orderBy: [desc(user.createdAt)],
+    const users = await User.find()
+      .select("name email username phone role avatar createdAt")
+      .sort({ createdAt: -1 });
+
+    const formatted = users.map((u) => {
+      const obj = u.toObject();
+      obj.id = obj._id;
+      return obj;
     });
-    res.status(200).json({ success: true, data: users });
+
+    res.status(200).json({ success: true, data: formatted });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -93,15 +85,18 @@ const getAllUsers = async (req, res) => {
 const updateUserRole = async (req, res) => {
   try {
     const { role } = req.body;
-    await db.update(user)
-      .set({ role })
-      .where(eq(user.id, req.params.id));
+    const updatedUser = await User.findByIdAndUpdate(
+      req.params.id,
+      { $set: { role } },
+      { new: true }
+    ).select("name email role");
 
-    const updatedUser = await db.query.user.findFirst({
-      where: eq(user.id, req.params.id),
-      columns: { id: true, name: true, email: true, role: true },
-    });
-    res.status(200).json({ success: true, data: updatedUser });
+    if (!updatedUser) return res.status(404).json({ success: false, message: "User not found" });
+
+    const formatted = updatedUser.toObject();
+    formatted.id = formatted._id;
+
+    res.status(200).json({ success: true, data: formatted });
   } catch (error) {
     res.status(400).json({ success: false, message: error.message });
   }
@@ -109,7 +104,8 @@ const updateUserRole = async (req, res) => {
 
 const deleteUser = async (req, res) => {
   try {
-    await db.delete(user).where(eq(user.id, req.params.id));
+    const deleted = await User.findByIdAndDelete(req.params.id);
+    if (!deleted) return res.status(404).json({ success: false, message: "User not found" });
     res.status(200).json({ success: true, message: "User deleted" });
   } catch (error) {
     res.status(400).json({ success: false, message: error.message });
